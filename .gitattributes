@@ -1,0 +1,4 @@
+# Shell scripts execute on Linux (in containers and on managed hosts):
+# a CRLF shebang line breaks the interpreter lookup (`/bin/sh\r`).
+# Force LF regardless of core.autocrlf on the checkout host.
+*.sh text eol=lf
