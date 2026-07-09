@@ -1,0 +1,233 @@
+name: Docker Runner
+
+# Publishes the portable ansible-runner image built from .docker/Dockerfile.
+# Same pipeline shape as docker-publish.yml (ansible-toolchain image):
+# build → test → push, push only on non-PR events.
+# - build: per-arch native matrix (amd64/arm64). Always produces tarball artifact.
+#   Labels-only metadata-action bakes OCI provenance into the image.
+#   No registry push. permissions: contents:read only.
+# - test: downloads artifact, loads image, runs container-structure-test.
+#   Identical path for PR and non-PR. No registry interaction.
+#   container-structure-test is installed from a pinned release tag (not /latest/).
+#   The binary is verified against the upstream-published checksums.txt (SHA256)
+#   before being moved into PATH. To upgrade: update CST_VERSION and the two
+#   expected SHA256 values (amd64/arm64) from the release's checksums.txt.
+# - push: non-PR only (needs: [build, test]). Loads artifact, pushes to ghcr.io
+#   with arch-gated tags (amd64 owns unqualified :latest and semver tags).
+#   Cosign signs after push. permissions: packages:write + id-token:write here only.
+#
+# Tag generation via docker/metadata-action runs only in the push job (with tags:).
+# The build job has a labels-only metadata-action call (no tags: input).
+# Do NOT add time-based tag patterns (type=schedule, timestamps) to metadata-action
+# without piping tags between jobs — they would diverge across job boundaries.
+
+on:
+  schedule:
+    # At 04:30 on Monday (offset from docker-publish.yml to avoid
+    # competing for the same runners)
+    - cron: '30 4 * * 1'
+  push:
+    branches: [ "main" ]
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # IMAGE_NAME cannot use expressions here (workflow-level env does not support ${{ }}).
+  # Each job computes it via: echo "IMAGE_NAME=..." >> $GITHUB_ENV
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set image name
+        run: echo "IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository_owner }}/ansible-runner" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      # Labels-only call: no tags: input. Populates steps.meta.outputs.labels
+      # (org.opencontainers.image.source, .revision, .created, etc.) so the
+      # tarball image carries full OCI provenance when pushed.
+      - name: Extract OCI labels
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ./.docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          push: false
+          tags: runner-test-image:${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            IMAGE_VERSION=${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+          cache-from: type=gha,scope=runner-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=runner-${{ matrix.arch }}
+
+      - name: Save image tarball
+        run: docker save runner-test-image:${{ matrix.arch }} | gzip > runner-image-${{ matrix.arch }}.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runner-image-${{ matrix.arch }}
+          path: runner-image-${{ matrix.arch }}.tar.gz
+          retention-days: 1
+
+  test:
+    needs: build
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install container-structure-test
+        env:
+          CST_VERSION: v1.22.1
+          CST_SHA256_AMD64: fa35e89512a8978585f76cf41397956d2e3a30c62c2ad3fb857b1597074d14ca
+          CST_SHA256_ARM64: 801826ed107222120eb6df8c143b7de752cfebbe3aebfeea576e7098486917c2
+        run: |
+          curl -fsSL "https://github.com/GoogleContainerTools/container-structure-test/releases/download/${CST_VERSION}/container-structure-test-linux-${{ matrix.arch }}" \
+            -o container-structure-test-linux-${{ matrix.arch }}
+          EXPECTED_VAR="CST_SHA256_$(echo '${{ matrix.arch }}' | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+          echo "${!EXPECTED_VAR}  container-structure-test-linux-${{ matrix.arch }}" | sha256sum --check --strict
+          chmod +x container-structure-test-linux-${{ matrix.arch }}
+          sudo mv container-structure-test-linux-${{ matrix.arch }} /usr/local/bin/container-structure-test
+
+      - name: Download image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: runner-image-${{ matrix.arch }}
+
+      - name: Load image from artifact
+        run: docker load < runner-image-${{ matrix.arch }}.tar.gz
+
+      - name: Run Structure Tests (${{ matrix.arch }})
+        run: |
+          container-structure-test test \
+            --image "runner-test-image:${{ matrix.arch }}" \
+            --config .docker/tests.yaml
+
+      - name: Check usage output without PLAYBOOK set
+        run: |
+          set -o pipefail
+          docker run --rm "runner-test-image:${{ matrix.arch }}" 2>&1 | tee usage.txt || true
+          grep -q "Available playbooks:" usage.txt
+          grep -q "playbooks/create-vm.yml" usage.txt
+
+  push:
+    needs: [build, test]
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set image name
+        run: echo "IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository_owner }}/ansible-runner" >> $GITHUB_ENV
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Unqualified tags (latest, vX.Y.Z, vX.Y, vX) are emitted only by amd64
+      # to eliminate the last-writer race when both matrix legs push in parallel.
+      # arm64 receives only latest-arm64.
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && matrix.arch == 'amd64' }}
+            type=raw,value=latest-${{ matrix.arch }},enable={{is_default_branch}}
+            type=semver,pattern={{version}},enable=${{ matrix.arch == 'amd64' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.arch == 'amd64' }}
+            type=semver,pattern={{major}},enable=${{ matrix.arch == 'amd64' }}
+
+      - name: Download image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: runner-image-${{ matrix.arch }}
+
+      - name: Load image from artifact
+        run: docker load < runner-image-${{ matrix.arch }}.tar.gz
+
+      - name: Tag and push image
+        id: push
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          DIGEST=""
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            docker tag "runner-test-image:${{ matrix.arch }}" "$tag"
+            docker push "$tag"
+            if [ -z "$DIGEST" ]; then
+              DIGEST=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$tag" \
+                | grep "^${IMAGE_NAME}@" | head -1 | cut -d@ -f2)
+            fi
+          done <<< "$TAGS"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Sign the published Docker image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
