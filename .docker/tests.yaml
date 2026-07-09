@@ -1,0 +1,78 @@
+schemaVersion: 2.0.0
+
+commandTests:
+  - name: "Check ansible-playbook pinned version"
+    command: "ansible-playbook"
+    args: [ "--version" ]
+    expectedOutput: [ "ansible-playbook \\[core 2\\.21\\..*" ]
+
+  - name: "Check python3 (entrypoint version check depends on it)"
+    command: "python3"
+    args: [ "--version" ]
+    expectedOutput: [ "Python 3.*" ]
+
+  - name: "Check community.general collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "community.general" ]
+    expectedOutput: [ ".*community.general.*" ]
+
+  - name: "Check ansible.posix collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "ansible.posix" ]
+    expectedOutput: [ ".*ansible.posix.*" ]
+
+  - name: "Check amazon.aws collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "amazon.aws" ]
+    expectedOutput: [ ".*amazon.aws.*" ]
+
+  - name: "Check hetzner.hcloud collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "hetzner.hcloud" ]
+    expectedOutput: [ ".*hetzner.hcloud.*" ]
+
+  - name: "Check ansible.windows collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "ansible.windows" ]
+    expectedOutput: [ ".*ansible.windows.*" ]
+
+  - name: "Check community.windows collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "community.windows" ]
+    expectedOutput: [ ".*community.windows.*" ]
+
+  - name: "Check chocolatey.chocolatey collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "chocolatey.chocolatey" ]
+    expectedOutput: [ ".*chocolatey.chocolatey.*" ]
+
+  - name: "Check containers.podman collection"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "containers.podman" ]
+    expectedOutput: [ ".*containers.podman.*" ]
+
+fileExistenceTests:
+  - name: "Entrypoint present and executable"
+    path: "/ansible/.docker/entrypoint.sh"
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+
+  - name: "VERSION stamped at build time"
+    path: "/ansible/VERSION"
+    shouldExist: true
+
+  - name: "ansible.cfg baked in"
+    path: "/ansible/ansible.cfg"
+    shouldExist: true
+
+  - name: "Vault secrets NOT baked into the image"
+    path: "/ansible/inventories/group_vars/all/vault.yml"
+    shouldExist: false
+
+  - name: "pip binary absent from runtime stage"
+    path: "/usr/bin/pip3"
+    shouldExist: false
+
+  - name: "git binary absent from runtime stage"
+    path: "/usr/bin/git"
+    shouldExist: false
