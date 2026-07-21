@@ -11,19 +11,28 @@
 # See .docker/README.md for the full mount and environment variable tables.
 set -euo pipefail
 
-IMAGE_REF="ghcr.io/eudicy/ansible-runner"
-REPO_API="https://api.github.com/repos/eudicy/ansible-all-my-things/releases/latest"
+# IMAGE_REF and SOURCE_REPO are baked in by the Dockerfile from build args
+# that CI fills from the publishing repository. Both are empty for a local
+# build, which has no published counterpart to point at.
+# Untagged: every use below appends the tag itself.
+IMAGE_REF="${IMAGE_REF:-ansible-runner}"
 
 # Compare the baked VERSION against the latest GitHub release. Completely
 # silent on any failure (network, non-200, malformed JSON) — an update
 # notice is a convenience, never a blocker.
 version_check() {
-    local local_version latest
+    local local_version latest repo_api
+    # No source repository baked in: locally built image, nothing to compare
+    # against. Never guess a repository — a wrong one reports another
+    # project's releases as if they were this image's.
+    [ -z "${SOURCE_REPO:-}" ] && return 0
+    repo_api="https://api.github.com/repos/${SOURCE_REPO}/releases/latest"
+
     local_version=$(cat /ansible/VERSION 2>/dev/null) || return 0
     [ -z "${local_version}" ] && return 0
     [ "${local_version}" = "dev" ] && return 0
 
-    latest=$(python3 - "${REPO_API}" <<'PYEOF' 2>/dev/null
+    latest=$(python3 - "${repo_api}" <<'PYEOF' 2>/dev/null
 import json
 import sys
 import urllib.request

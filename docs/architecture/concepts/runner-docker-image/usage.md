@@ -7,7 +7,14 @@ docker pull ghcr.io/<owner>/ansible-runner:latest
 ```
 
 Replace `<owner>` with the GitHub user or organisation that owns the
-repository (e.g. `eudicy` for this fork).
+repository, lowercased — container repository names must be lowercase even
+when the GitHub owner is not.
+
+The image knows which repository published it: CI bakes that identity in at
+build time, so a published image prints its own pull command in the usage
+help and checks that repository for newer releases. A locally built image
+carries no such identity, refers to itself as `ansible-runner:latest`, and
+performs no update check.
 
 ## Show usage help and available playbooks
 
@@ -132,7 +139,18 @@ providers from a normal host checkout.
 
 ## Image update notice
 
-The entrypoint compares the baked image version against the latest
-GitHub release of this repository (3-second timeout, silent on any
-failure) and prints a `docker pull` hint when a newer release exists.
-Images built locally carry the version `dev` and skip the check.
+The entrypoint compares the baked image version against the latest GitHub
+release of the repository that published the image (3-second timeout, silent
+on any failure) and prints a `docker pull` hint when a newer release exists.
+
+Three build arguments carry that identity into the image, all set by CI and
+all empty or `dev` for a local build:
+
+| Build argument | Purpose | Local default |
+| --- | --- | --- |
+| `IMAGE_VERSION` | Written to `/ansible/VERSION`; compared against the release tag. | `dev` |
+| `IMAGE_REF` | Registry reference the image prints in its update hint and usage help. | empty → `ansible-runner:latest` |
+| `SOURCE_REPO` | `owner/repo` whose releases are queried. | empty → check skipped |
+
+A locally built image therefore never reports another repository's releases
+as its own, and never advertises a registry it was not published to.

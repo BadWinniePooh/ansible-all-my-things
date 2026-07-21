@@ -11,6 +11,13 @@ commandTests:
     args: [ "--version" ]
     expectedOutput: [ "Python 3.*" ]
 
+  # Without a populated trust store every HTTPS request from the entrypoint
+  # fails verification, and the silent-by-design version check never fires.
+  - name: "Check TLS trust store is populated"
+    command: "python3"
+    args: [ "-c", "import ssl; print('CA paths:', len(ssl.create_default_context().get_ca_certs()))" ]
+    excludedOutput: [ "CA paths: 0" ]
+
   - name: "Check community.general collection"
     command: "ansible-galaxy"
     args: [ "collection", "list", "community.general" ]
@@ -50,6 +57,14 @@ commandTests:
     command: "ansible-galaxy"
     args: [ "collection", "list", "containers.podman" ]
     expectedOutput: [ ".*containers.podman.*" ]
+
+  # A locally built image carries no publisher identity, so it must never
+  # name a foreign registry. Guards against a hardcoded owner returning.
+  - name: "Usage output falls back to the local image tag"
+    command: "/ansible/.docker/entrypoint.sh"
+    expectedOutput: [ "(?s).*ansible-runner:latest.*" ]
+    excludedOutput: [ "ghcr\\.io/" ]
+    exitCode: 1
 
 fileExistenceTests:
   - name: "Entrypoint present and executable"

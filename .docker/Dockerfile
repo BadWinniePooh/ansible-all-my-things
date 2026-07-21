@@ -55,8 +55,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install -y --no-install-recommends \
+        ca-certificates \
         openssh-client \
         python3
+
+# ca-certificates is required for the entrypoint's HTTPS release check:
+# --no-install-recommends leaves the trust store empty, and Python's urllib
+# then fails every request with CERTIFICATE_VERIFY_FAILED. Because that
+# check is silent by design, the failure is invisible — the update notice
+# simply never appears.
 
 # Copy ansible (pipx venv + wrappers) and galaxy collections
 COPY --from=builder /root/.local /root/.local
@@ -80,9 +87,20 @@ COPY . /ansible
 RUN find /ansible -name '*.sh' -exec sed -i 's/\r$//' {} + \
     && chmod +x /ansible/.docker/entrypoint.sh /ansible/scripts/*.sh
 
-# Declared after the repo COPY so changing the version does not bust the
-# earlier cache layers.
+# Declared after the repo COPY so changing these does not bust the earlier
+# cache layers.
+#
+# IMAGE_REF and SOURCE_REPO carry the identity of whoever built this image;
+# a container cannot discover either at runtime. They stay separate because
+# the registry path and the GitHub repository are different strings, and a
+# fork may publish to a namespace that does not match its GitHub owner.
+# Empty means "built locally": the entrypoint then skips the update check
+# and falls back to the local image tag.
 ARG IMAGE_VERSION=dev
+ARG IMAGE_REF=""
+ARG SOURCE_REPO=""
 RUN echo "${IMAGE_VERSION}" > /ansible/VERSION
+ENV IMAGE_REF="${IMAGE_REF}" \
+    SOURCE_REPO="${SOURCE_REPO}"
 
 ENTRYPOINT ["/ansible/.docker/entrypoint.sh"]
