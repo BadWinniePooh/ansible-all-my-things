@@ -1,0 +1,34 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Required vars: checksum_file_url, checksum_target_filename
+# Sets fact: fetched_checksum
+#
+# Fetches an upstream-published sha256 checksums file (GNU sha256sum text
+# format: "<64-hex-sha256>  <filename>", one entry per line) and extracts the
+# line matching checksum_target_filename exactly. Use only when upstream
+# actually publishes a checksums file covering the exact consumed asset --
+# otherwise fall back to download + ansible.builtin.stat.
+
+- name: Fetch checksum file from {{ checksum_file_url }}
+  ansible.builtin.uri:
+    url: "{{ checksum_file_url }}"
+    return_content: true
+  register: _checksum_file_response
+
+- name: Extract checksum for {{ checksum_target_filename }} from checksum file
+  ansible.builtin.set_fact:
+    _checksum_match: >-
+      {{ _checksum_file_response.content
+         | regex_search('^([0-9a-f]{64})\s+' + (checksum_target_filename | regex_escape) + '$', '\1', multiline=True)
+         | default([], true) }}
+
+- name: Fail if checksum not found in {{ checksum_file_url }}
+  ansible.builtin.fail:
+    msg: >-
+      Checksum for '{{ checksum_target_filename }}' not found in
+      {{ checksum_file_url }} -- cannot resolve checksum.
+  when: _checksum_match | length == 0
+
+- name: Set checksum fact
+  ansible.builtin.set_fact:
+    fetched_checksum: "{{ _checksum_match | first }}"

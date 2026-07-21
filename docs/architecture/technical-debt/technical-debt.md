@@ -4,6 +4,9 @@ This document collects known technical debt and accepted risks in the project.
 Each entry records the context, the risk, and why it was accepted or deferred.
 
 New entries are appended as they are identified, typically during code reviews.
+Resolved entries are deleted from this file entirely rather than kept with a
+`Resolved` status — git history is the record of what was once tracked and how
+it was resolved.
 
 ## Entry format
 
@@ -16,49 +19,9 @@ Each entry uses the following fields:
 - **Affected file(s)** — file references
 - **Description** — what the issue is and why it matters
 - **Mitigation** — controls that reduce the risk today
-- **Status** — `Open`, `Resolved`, or `Wont-fix`
+- **Status** — `Open` or `Wont-fix`. Resolved entries are deleted from this
+  file entirely, not marked `Resolved` — git history is the record.
 - **Date added**
-
----
-
-## TD-001 — No integrity check on the Claude Code installer script
-
-- **Category:** Accepted Risk
-- **Severity:** High
-- **Affected file(s):** [roles/claude_code/tasks/main.yml](../../roles/claude_code/tasks/main.yml)
-- **Date added:** 2026-02-27
-
-### TD-001: Description
-
-The Claude Code installer script is downloaded from `https://claude.ai/install.sh`
-and executed directly via the `shell` module without any checksum verification.
-A compromise of Anthropic's CDN or a supply-chain attack on the install script
-endpoint could deliver a malicious script that runs under the target user's account.
-
-The binary integrity verification that follows catches post-installation tampering
-of the `claude` binary itself, but it does not protect against harm done by a
-malicious installer before the binary is written to disk.
-
-### TD-001: Mitigation
-
-HTTPS transport provides the primary protection: the TLS connection to `claude.ai`
-prevents in-transit modification and authenticates the server's identity.
-This is the same trust model used by widely accepted installers such as Homebrew,
-rustup, and the official Node.js installer.
-
-Additionally, the subsequent binary checksum verification (comparing the installed
-binary against the manifest published by Anthropic) limits the damage a compromised
-installer could do to the binary itself.
-
-### TD-001: Ideas for solution
-
-Use VirusTotal:
-
-- [VirusTotal: URL Scan of https://claude.ai/install.sh](https://www.virustotal.com/gui/url/128ceb81537736671e63bc2d1c028b5cd6cf1749c4a940fcc0646e41be7e0aec/details)
-
-### TD-001: Status
-
-Open — accepted risk. Revisit if Anthropic publishes installer checksums.
 
 ---
 
@@ -73,7 +36,6 @@ Open — accepted risk. Revisit if Anthropic publishes installer checksums.
   - [playbooks/setup-desktop.yml](../../playbooks/setup-desktop.yml)
   - [playbooks/setup-homebrew.yml](../../playbooks/setup-homebrew.yml)
   - [playbooks/setup-keyring.yml](../../playbooks/setup-keyring.yml)
-  - [playbooks/setup-nodejs.yml](../../playbooks/setup-nodejs.yml)
   - [playbooks/setup-users.yml](../../playbooks/setup-users.yml)
 - **Date added:** 2026-03-12
 
@@ -81,7 +43,7 @@ Open — accepted risk. Revisit if Anthropic publishes installer checksums.
 
 Constitution Principle II (Role-First Organisation) requires that playbooks only
 orchestrate roles and must not contain implementation logic (tasks, handlers, or
-templates) directly. All eight playbooks listed above pre-date the ratification
+templates) directly. All seven playbooks listed above pre-date the ratification
 of the constitution (2026-03-11) and contain direct task lists.
 
 When the constitution was ratified, no refactoring migration was performed. New
@@ -277,10 +239,10 @@ packages delivered from the Google apt repository. A compromise of Google's CDN
 or a TLS bypass could deliver a tampered key, enabling installation of malicious
 packages on every future `apt` run.
 
-This is the same class of risk as TD-001 (Claude Code installer script without
-checksum), but the artifact differs: TD-001 concerns an executable script that
-runs under the user's account; this entry concerns a GPG public key that controls
-apt package trust. The blast radius and resolution path are independent.
+This is the same class of risk as an unverified installer script running under
+the user's account, but the artifact differs: that risk concerned an executable
+script; this entry concerns a GPG public key that controls apt package trust.
+The blast radius and resolution path are independent.
 
 ### TD-007: Mitigation
 
@@ -389,8 +351,8 @@ alternative available from the trusted source.
 
 HTTPS transport to `dl.google.com` provides the primary protection against
 in-transit substitution. The SHA-1 checksum guards against storage
-corruption only. This is the same trust model accepted in TD-001 and
-TD-007.
+corruption only. This is the same HTTPS-transport-only trust model accepted
+for TD-007 (Google's Chrome signing key).
 
 The risk is further constrained by the developer-workstation threat model:
 exploiting a SHA-1 collision against Google's CDN is a nation-state-level

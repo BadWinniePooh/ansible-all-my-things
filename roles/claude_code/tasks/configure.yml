@@ -10,6 +10,14 @@
   become: true
   loop: "{{ desktop_user_names }}"
 
+- name: Initialize rtk globally for each desktop user
+  ansible.builtin.command:
+    cmd: rtk init -g
+  become: true
+  become_user: "{{ item }}"
+  loop: "{{ desktop_user_names }}"
+  changed_when: false
+
 - name: Merge required keys into settings.json
   ansible.builtin.shell: |
     FILE="$HOME/.claude/settings.json"
@@ -23,7 +31,7 @@
     HOOKEOF
     )
     MERGED=$(printf '%s' "$CURRENT" | jq --arg bdcmd "$BD_HOOK_CMD" '
-      .env = (.env // {} | . + {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS":"1","CLAUDE_CODE_SPAWN_BACKEND":"tmux"})
+      .env = (.env // {} | . + {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS":"1","CLAUDE_CODE_SPAWN_BACKEND":"tmux","DISABLE_AUTOUPDATER":"1","DISABLE_UPDATES":"1"})
       | .teammateMode = "tmux"
       | if (.hooks.PreToolUse // [] | map(select((.hooks // [] | map(select(.command == "rtk hook claude")) | length > 0))) | length) == 0
         then .hooks.PreToolUse = ((.hooks.PreToolUse // []) + [{"matcher":"Bash","hooks":[{"type":"command","command":"rtk hook claude"}]}])
@@ -57,14 +65,6 @@
   become: true
   become_user: "{{ item }}"
   loop: "{{ desktop_user_names }}"
-
-- name: Initialize rtk globally for each desktop user
-  ansible.builtin.command:
-    cmd: rtk init -g
-  become: true
-  become_user: "{{ item }}"
-  loop: "{{ desktop_user_names }}"
-  changed_when: false
 
 - name: Copy OMC setup prompt for each desktop user
   ansible.builtin.copy:

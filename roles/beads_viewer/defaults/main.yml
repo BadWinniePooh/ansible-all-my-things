@@ -1,0 +1,21 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Pinned bv (Dicklesworthstone/beads_viewer) release tag (v-prefixed). See
+# https://github.com/Dicklesworthstone/beads_viewer/releases for available versions.
+# Updated automatically by playbooks/update-versions/perform-updates.yml.
+beads_viewer_version: "v0.18.0"
+
+# Maps Ansible architecture facts to the Go release filename fragment used by
+# bv (Dicklesworthstone/beads_viewer), which follows the
+# {x86_64: amd64, aarch64: arm64} archive naming convention.
+beads_viewer_platform_map:
+  x86_64: amd64
+  aarch64: arm64
+
+# SHA-256 checksums for the linux release archives (amd64 and arm64).
+# Compute (download to file first -- pipe-only sha256sum can truncate and
+# give the wrong hash):
+#   curl -sL https://github.com/Dicklesworthstone/beads_viewer/releases/download/<tag>/bv_linux_<arch>.tar.gz -o /tmp/bv.tar.gz
+#   sha256sum /tmp/bv.tar.gz
+beads_viewer_sha256_amd64: "b8df409c380cc4db9f07cf0329ee8a4d8e669be812528ef1b3b2e0b1260e9145"
+beads_viewer_sha256_arm64: "d5734864f78a0d3f1986957deea71a88bd92342f99d38c37e1667d0bdd9b9537"

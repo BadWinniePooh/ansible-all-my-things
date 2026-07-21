@@ -1,0 +1,24 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Load role defaults for version reference
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../defaults/main.yml"
+
+    - name: Get installed Obsidian package version
+      ansible.builtin.command: dpkg-query -W -f='${Version}' obsidian
+      register: _verify_obsidian_version
+      changed_when: false
+
+    - name: Assert Obsidian version matches pinned version exactly
+      ansible.builtin.assert:
+        that:
+          - _verify_obsidian_version.stdout == (obsidian_version | regex_replace('^v', ''))
+        fail_msg: >-
+          Expected Obsidian version {{ obsidian_version | regex_replace('^v', '') }}
+          but got: {{ _verify_obsidian_version.stdout }}
+        success_msg: >-
+          Obsidian version {{ _verify_obsidian_version.stdout }} matches pin

@@ -1,0 +1,24 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Pinned Node.js LTS release version (v-prefixed, matching nodejs.org's own
+# index.json convention -- used as-is, no stripping needed anywhere). See
+# https://nodejs.org/en/about/previous-releases for available LTS versions.
+# Updated automatically by playbooks/update-versions/perform-updates.yml.
+#
+# Uses the node_ prefix (matching node_platform_map/node_stat below), NOT
+# nodejs_* -- corrects a naming mismatch found in bd issue m0av.3's text.
+node_version: "v24.18.0"
+
+# Maps an Ansible architecture fact to the nodejs.org release archive's
+# platform fragment.
+node_platform_map:
+  x86_64: x64
+  aarch64: arm64
+
+# SHA-256 checksums for the linux release tarballs (x64 and arm64). Both
+# checksums and node_version must be updated together. Compute (download to
+# file first -- pipe-only sha256sum can truncate and give the wrong hash):
+#   curl -sL https://nodejs.org/dist/<version>/node-<version>-linux-<arch>.tar.gz -o /tmp/node.tar.gz
+#   sha256sum /tmp/node.tar.gz
+node_sha256_x64: "783130984963db7ba9cbd01089eaf2c2efb055c7c1693c943174b967b3050cb8"
+node_sha256_arm64: "6b4484c2190274175df9aa8f28e2d758a819cb1c1fe6ab481e2f95b463ab8508"

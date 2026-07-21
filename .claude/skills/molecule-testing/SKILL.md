@@ -238,6 +238,32 @@ cd roles/<role-name>
 The wrapper serializes molecule test runs host-wide, ensuring the shared
 `instance` container is only in use by one session at a time.
 
+## Troubleshooting: stale podman base image causes spurious apt 404s
+
+If a container-install task fails with an apt 404 for a package version
+that should exist (e.g. `python3.12-venv_<version>_arm64.deb`), and the
+failure persists even after removing the tagged
+`localhost/molecule_local/molecule_<rolename>_instance` image and
+rebuilding, the root cause is usually the underlying base image (e.g.
+`docker.io/library/ubuntu:24.04`), not the tagged scenario image.
+Podman build reuses that cached base layer, so the Dockerfile's
+`apt-get update` bakes in an index referencing package point-releases
+the mirror has since pruned. Removing only the tagged image does not
+invalidate the cached base-image layer.
+
+Fix: purge all cached images, forcing a fresh pull and a fresh
+`apt-get update` on the next build:
+
+```shell
+podman system prune -a -f
+```
+
+This risk applies to any role's Molecule scenario using the standard
+Dockerfile pattern (`apt-get update` baked at image-build time, not
+refreshed at converge time) — run the prune proactively before a
+`molecule test` session if the base image has not been rebuilt
+recently.
+
 ## Troubleshooting: molecule not found
 
 If `molecule` is not on PATH, the project `.venv` is missing or stale.

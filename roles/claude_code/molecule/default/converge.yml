@@ -11,4 +11,7 @@
         password: testpassword
         exa_api_key: test_fake_exa_key
   roles:
+    - role: rtk
+    - role: nodejs
+    - role: ai_agent_workspace
     - role: claude_code

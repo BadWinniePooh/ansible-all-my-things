@@ -1,0 +1,11 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Pinned specify-cli (github/spec-kit) release tag (v-prefixed, matching the
+# git tag used by the pipx install command as-is -- no stripping needed).
+# See https://github.com/github/spec-kit/releases for available versions.
+# Updated automatically by playbooks/update-versions/perform-updates.yml.
+#
+# No checksum applies: this is a pipx install from a git tag (source install),
+# not a binary/archive download -- same shape as github_cli's version-only
+# row in version-update-playbooks.md's tool table.
+specify_cli_version: "v0.12.11"

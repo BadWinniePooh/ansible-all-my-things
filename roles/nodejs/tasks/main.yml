@@ -1,0 +1,67 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Check if node binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/node
+  register: node_stat
+
+- name: Install Node.js LTS from a checksum-verified release archive
+  when: not node_stat.stat.exists
+  become: true
+  block:
+    - name: Verify supported processor architecture
+      ansible.builtin.assert:
+        that: "ansible_facts['architecture'] in node_platform_map"
+        fail_msg: >
+          Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+          Supported architectures are: {{ node_platform_map.keys() | list }}.
+
+    # node_version is a static pin (roles/nodejs/defaults/main.yml), refreshed
+    # only by playbooks/update-versions/perform-updates.yml -- see
+    # Constitution Principle II. checksum: is a literal instead of a live
+    # SHASUMS256.txt URL fetch so re-converge never silently re-verifies
+    # against a newer release.
+    - name: Download and checksum-verify the Node.js release archive
+      ansible.builtin.get_url:
+        url: "https://nodejs.org/dist/{{ node_version }}/node-{{ node_version }}-linux-{{ node_platform_map[ansible_facts['architecture']] }}.tar.gz"
+        dest: "/tmp/node-{{ node_version }}-linux-{{ node_platform_map[ansible_facts['architecture']] }}.tar.gz"
+        checksum: "sha256:{{ (node_sha256_x64 if ansible_facts['architecture'] == 'x86_64' else node_sha256_arm64) }}"
+        mode: '0644'
+
+    - name: Ensure /usr/local/lib/nodejs exists
+      ansible.builtin.file:
+        path: /usr/local/lib/nodejs
+        state: directory
+        mode: '0755'
+
+    - name: Extract the verified Node.js archive
+      ansible.builtin.unarchive:
+        src: "/tmp/node-{{ node_version }}-linux-{{ node_platform_map[ansible_facts['architecture']] }}.tar.gz"
+        dest: /usr/local/lib/nodejs
+        remote_src: true
+
+    - name: Symlink Node.js binaries into /usr/local/bin
+      ansible.builtin.file:
+        src: "/usr/local/lib/nodejs/node-{{ node_version }}-linux-{{ node_platform_map[ansible_facts['architecture']] }}/bin/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        state: link
+      loop:
+        - node
+        - npm
+        - npx
+        - corepack
+
+- name: Install frequently used global npm packages
+  ansible.builtin.shell: |
+    npm install --global --prefix /usr/local \
+      eslint \
+      markdownlint-cli \
+      prettier \
+      typescript
+  # Explicit --prefix /usr/local makes the install location deterministic
+  # regardless of the /usr/local/bin/npm symlink's real target, and matches
+  # the last package (typescript) used in the creates: check below.
+  args:
+    executable: /bin/bash
+    creates: /usr/local/lib/node_modules/typescript
+  become: true

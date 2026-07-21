@@ -1,0 +1,29 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Check beads_rust binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/br
+      register: beads_rust_stat
+
+    - name: Assert beads_rust is installed
+      ansible.builtin.assert:
+        that:
+          - beads_rust_stat.stat.exists
+        fail_msg: "beads_rust binary not found at /usr/local/bin/br"
+        success_msg: "beads_rust binary found at /usr/local/bin/br"
+
+    - name: Check beads_rust source repository exists
+      ansible.builtin.stat:
+        path: /home/testuser/Documents/Cline/beads_rust/.git
+      register: beads_rust_src_stat
+
+    - name: Assert beads_rust source repository is cloned
+      ansible.builtin.assert:
+        that:
+          - beads_rust_src_stat.stat.exists
+        fail_msg: "beads_rust source repo not found at /home/testuser/Documents/Cline/beads_rust/.git"
+        success_msg: "beads_rust source repo found at /home/testuser/Documents/Cline/beads_rust/.git"

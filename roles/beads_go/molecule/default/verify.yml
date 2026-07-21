@@ -1,0 +1,29 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Check beads binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/bd
+      register: beads_stat
+
+    - name: Assert beads is installed
+      ansible.builtin.assert:
+        that:
+          - beads_stat.stat.exists
+        fail_msg: "beads binary not found at /usr/local/bin/bd"
+        success_msg: "beads binary found at /usr/local/bin/bd"
+
+    - name: Check beads source repository exists
+      ansible.builtin.stat:
+        path: /home/testuser/Documents/Cline/beads/.git
+      register: beads_src_stat
+
+    - name: Assert beads source repository is cloned
+      ansible.builtin.assert:
+        that:
+          - beads_src_stat.stat.exists
+        fail_msg: "beads source repo not found at /home/testuser/Documents/Cline/beads/.git"
+        success_msg: "beads source repo found at /home/testuser/Documents/Cline/beads/.git"

@@ -5,15 +5,30 @@ Ansible role that installs [Anthropic's Claude Code](https://claude.ai/code) CLI
 on Linux for each desktop user, verifies binary integrity, installs the
 [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) and
 [caveman](https://github.com/JuliusBrussee/caveman) Claude Code plugins,
-clones the [ai-agent-workspace](https://github.com/eudicy/ai-agent-workspace)
-with its skill library, and configures the [Exa](https://exa.ai) MCP server
-for web search.
+symlinks skills from an [ai-agent-workspace](https://github.com/eudicy/ai-agent-workspace)
+clone (provisioned by the `ai_agent_workspace` role) into `~/.claude/skills`,
+and configures the [Exa](https://exa.ai) MCP server for web search.
+
+`beads`, `specify_cli`, and the ai-agent-workspace clone are cross-harness
+CLI tools installed by their own single-purpose roles, not by `claude_code`.
+Those roles must run before this one (`ai_agent_workspace` specifically,
+since the retained symlink task depends on its clone already existing). The
+`rtk` role installs only the `rtk` binary; `rtk init -g` and the `omc` CLI +
+oh-my-claudecode source clone are installed here instead — see `DESIGN.md`
+for why.
 
 ## Requirements
 
 - Ansible 2.19+
-- `git` present on target hosts (not managed by this role)
-- Internet access from target hosts (downloads Claude Code, plugins, beads)
+- `git` present on target hosts (used for Claude Code plugin marketplace and
+  oh-my-claudecode source clones)
+- The `ai_agent_workspace` role applied first, providing
+  `~/Documents/Cline/ai-agent-workspace`
+- The `rtk` role applied first, providing `/usr/local/bin/rtk`
+- The `nodejs` role applied first, providing a system-wide Node.js LTS
+  install (`/usr/local/bin/node`/`npm`)
+- Internet access from target hosts (downloads Claude Code, plugins, and the
+  omc CLI)
 
 ## Role Variables
 
@@ -26,7 +41,7 @@ for web search.
 
 ## Dependencies
 
-None. See `meta/main.yml` for details.
+`rtk`, `nodejs`, `ai_agent_workspace`. See `meta/main.yml` for details.
 
 ## Example Playbook
 
@@ -50,18 +65,23 @@ None. See `meta/main.yml` for details.
 ## What This Role Does
 
 1. Verifies the target architecture is supported
-2. Fetches the latest Claude Code version and release manifest
-3. Downloads and runs the official Claude Code installer for each user
-   (skipped if already installed)
-4. Verifies the installed binary checksum against the release manifest
-5. Adds `~/.local/bin` to each user's `PATH` via `.bashrc`
-6. Clones the oh-my-claudecode source repo to `~/Documents/Cline/oh-my-claudecode`
-7. Installs the [beads](https://github.com/steveyegge/beads) issue tracker (`bd`)
-8. Clones [ai-agent-workspace](https://github.com/eudicy/ai-agent-workspace) to
-   `~/Documents/Cline/ai-agent-workspace` and symlinks its skills into
-   `~/.claude/skills/` (idempotent; re-provision pulls updates and re-links)
-9. Registers and installs the oh-my-claudecode Claude Code plugin
-10. Registers and installs the caveman Claude Code plugin
+2. Downloads the binary for the pinned `claude_code_version` directly from
+   the manifest-derived URL for each user (skipped if already installed),
+   verifying it against the pinned per-platform sha256 checksum BEFORE
+   placement via Ansible-native SHA256 checking
+3. Adds `~/.local/bin` to each user's `PATH` via `.bashrc`
+4. Symlinks skills from the `ai_agent_workspace` role's clone into
+   `~/.claude/skills/` (idempotent; re-provision re-links)
+5. Registers and installs the oh-my-claudecode Claude Code plugin
+6. Registers and installs the caveman Claude Code plugin
+7. Registers the claude-plugins-official marketplace and installs the
+   context7 plugin
+8. Clones the oh-my-claudecode source repo and installs the `omc` CLI
+   (`oh-my-claude-sisyphus`, skipped if already installed)
+9. Initializes rtk globally (`rtk init -g`) for each desktop user
+10. Merges required keys (agent-team env vars, auto-update-disable env vars,
+    rtk/bd-guard hooks) into `settings.json` — see `DESIGN.md` for why
+    auto-update is disabled
 11. Configures the [Exa](https://exa.ai) MCP server (`exa`) with the user's API
     key (skipped if already registered)
 

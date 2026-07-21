@@ -36,6 +36,25 @@ would overwrite. The jq script detects whether the target state already exists
 and prints `NO_CHANGE` or `CHANGED`, which `changed_when` uses to report
 accurately.
 
+## Why auto-update is disabled
+
+Unlike `rtk`/`beads`/`nodejs`, which have no self-update mechanism, the
+Claude Code binary itself checks for and installs updates in the background
+(on startup and periodically) by default for native/npm-style installs —
+only Homebrew/WinGet/apt/dnf/apk installs skip this. `install-claude-code.yml`
+downloads the binary directly via `get_url` against the pinned
+`claude_code_version`, which bypasses the native installer's
+versioned-directory layout but not the binary's own baked-in auto-update
+behavior. Left unconstrained, the running `claude` version could silently
+drift away from the pinned default the next time a user launches it —
+defeating the explicit-pin-controlled-only-by-`perform-updates.yml` model
+this project applies to every pinned tool.
+
+`configure.yml` sets both `DISABLE_AUTOUPDATER=1` (stops the background
+update check) and `DISABLE_UPDATES=1` (also blocks manual `claude update`/
+`claude install`, the stronger guarantee) in `settings.json`'s `env` key, so
+the pinned version can only change via `perform-updates.yml`.
+
 ## settings.json: bd-guard hook via jq --arg
 
 The bd-guard `PreToolUse` hook blocks `bd list --all`, which enters an unbounded
@@ -58,3 +77,31 @@ whitespace. This avoids false positives when the literal string
 `bd list --all` appears inside a grep argument (`grep -qF 'bd list --all'`)
 or a jq expression (`contains("bd list --all")`), where `bd` is preceded
 by a quote character, not whitespace.
+
+## Why the omc CLI install lives here, not in its own role
+
+`omc` (oh-my-claudecode) is itself an orchestration layer built specifically
+for Claude Code sessions — it has no life outside one, unlike a general
+binary such as `rtk` that any harness or shell can invoke standalone. The
+deciding test: does this concern have any life outside a Claude Code
+session? `omc` does not; the Claude Code binary, plugins, and settings.json
+wiring it sits alongside (`install-omc-cli.yml`) do not either.
+
+The Node.js/npm dependency this role's `omc` CLI install needs is provisioned
+by the `nodejs` role, declared as a hard `meta/main.yml` dependency (it
+unconditionally invokes `npm`, per the decision test in
+`docs/architecture/concepts/role-dependency-declaration.md`). This role's own
+Molecule `converge.yml` composes `nodejs` alongside it, so a green
+`molecule test` validates the real dependency, not an isolated fixture.
+
+## Why `rtk init -g` lives here, not in the `rtk` role
+
+Same test as above, applied to rtk: `rtk`'s binary install genuinely has
+life outside a Claude Code session (any harness can shell out to
+`/usr/local/bin/rtk`), but `rtk init -g` writes into `~/.claude` — this
+role's own config directory, not rtk's install path — and no other harness
+reads it. So the binary install stays in the `rtk` role; the
+`~/.claude`-targeting init runs here (`configure.yml`), next to the
+directory creation and settings.json wiring it belongs with. `claude_code`'s
+own Molecule `converge.yml` composes the `rtk` role so the binary exists
+before this task runs.

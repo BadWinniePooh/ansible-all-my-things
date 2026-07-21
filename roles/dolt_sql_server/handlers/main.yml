@@ -5,4 +5,6 @@
     daemon_reload: true
     name: "{{ dolt_service_name }}"
     state: restarted
+  # Guard required for containerized Molecule runs: a container has no
+  # systemctl, so the handler would fail there without this condition.
   when: ansible_facts['service_mgr'] == 'systemd'

@@ -6,6 +6,9 @@
 # (e.g. desktop, Windows) are skipped.
 #
 # All roles are tested even if one fails. A summary is printed at the end.
+# Exit status is 1 if any role failed, 0 otherwise. This is the canonical
+# role-discovery mechanism for CI — call it rather than reimplementing the
+# scenario scan.
 #
 # Usage: run from the project root
 #   ./scripts/test-molecule-all.sh

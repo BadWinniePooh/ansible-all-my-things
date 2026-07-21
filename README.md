@@ -34,6 +34,10 @@ Further setup instructions:
 - [Backup and Restore](./docs/user-manual/backup-restore.md)
 - [Synchronize Git Repositories with a VM](./docs/user-manual/synchronize-repos-with-vm.md)
 
+The Cheat Sheet contains frequently used commands and recommendations:
+
+- [Cheat Sheet and Recommendations](./docs/user-manual/cheat-sheet.md)
+
 ## Documentation
 
 The [/docs](./docs/) folder contains documentation for some aspects of the system.

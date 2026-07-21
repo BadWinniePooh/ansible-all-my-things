@@ -1,0 +1,17 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Check rtk binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/rtk
+      register: rtk_stat
+
+    - name: Assert rtk is installed
+      ansible.builtin.assert:
+        that:
+          - rtk_stat.stat.exists
+        fail_msg: "rtk binary not found at /usr/local/bin/rtk"
+        success_msg: "rtk binary found at /usr/local/bin/rtk"

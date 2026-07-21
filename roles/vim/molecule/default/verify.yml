@@ -1,0 +1,34 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Assert vim package is installed
+      ansible.builtin.assert:
+        that:
+          - "'vim' in ansible_facts.packages"
+
+    - name: Stat the vim binary
+      ansible.builtin.stat:
+        path: /usr/bin/vim
+      register: vim_binary
+
+    - name: Assert vim binary exists
+      ansible.builtin.assert:
+        that:
+          - vim_binary.stat.exists
+
+    - name: Run vim --version
+      ansible.builtin.command: vim --version
+      changed_when: false
+      register: vim_version_output
+
+    - name: Assert vim --version succeeded
+      ansible.builtin.assert:
+        that:
+          - vim_version_output.rc == 0

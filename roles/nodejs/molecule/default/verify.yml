@@ -1,0 +1,54 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Verify
+  hosts: all
+  become: true
+  tasks:
+    - name: Check node binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/node
+      register: node_stat
+
+    - name: Assert node is installed
+      ansible.builtin.assert:
+        that:
+          - node_stat.stat.exists
+        fail_msg: "node binary not found at /usr/local/bin/node"
+        success_msg: "node binary found at /usr/local/bin/node"
+
+    - name: Check Node.js version
+      ansible.builtin.command: node --version
+      register: node_version_output
+      changed_when: false
+
+    - name: Assert a Node.js version was resolved
+      ansible.builtin.assert:
+        that: "node_version_output.stdout is match('^v[0-9]+\\.')"
+        fail_msg: "node --version did not report a resolved Node.js version"
+        success_msg: "Node.js {{ node_version_output.stdout }} active"
+
+    - name: Check npm version
+      ansible.builtin.command: npm --version
+      register: npm_version_output
+      changed_when: false
+
+    - name: Assert npm reports a version
+      ansible.builtin.assert:
+        that: "npm_version_output.stdout is match('^[0-9]+\\.')"
+        fail_msg: "npm --version did not report a version"
+        success_msg: "npm {{ npm_version_output.stdout }} active"
+
+    - name: Check global npm packages are installed
+      ansible.builtin.command: npm list --global --prefix /usr/local --depth=0
+      register: npm_global_list
+      changed_when: false
+
+    - name: Assert the 4 expected global npm packages are present
+      ansible.builtin.assert:
+        that:
+          - "'eslint' in npm_global_list.stdout"
+          - "'markdownlint-cli' in npm_global_list.stdout"
+          - "'prettier' in npm_global_list.stdout"
+          - "'typescript' in npm_global_list.stdout"
+        fail_msg: "One or more global npm packages missing: {{ npm_global_list.stdout }}"
+        success_msg: "eslint, markdownlint-cli, prettier, typescript all present"

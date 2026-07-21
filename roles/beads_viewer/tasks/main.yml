@@ -1,0 +1,49 @@
+#SPDX-License-Identifier: MIT-0
+---
+# -----
+# Install beads viewer (bv) from the Dicklesworthstone/beads_viewer GitHub
+# release
+#
+# beads_viewer_version and the per-architecture checksums are static pins (see
+# roles/beads_viewer/defaults/main.yml), refreshed only by
+# playbooks/update-versions/perform-updates.yml -- there is no live
+# checksums.txt fetch left; get_url's checksum: param verifies against the
+# pinned literal. Archive filenames are version-agnostic (e.g.
+# bv_linux_amd64.tar.gz). Same static-pin, no-partial-file, system-wide
+# semantics as bd (roles/beads_go).
+# -----
+
+- name: Check if bv binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/bv
+  register: bv_stat
+
+- name: Install bv from a checksum-verified release archive
+  when: not bv_stat.stat.exists
+  become: true
+  block:
+    - name: Verify supported processor architecture for bv
+      ansible.builtin.assert:
+        that: "ansible_facts['architecture'] in beads_viewer_platform_map"
+        fail_msg: >
+          Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+          Supported architectures are: {{ beads_viewer_platform_map.keys() | list }}.
+
+    # beads_viewer_version is a static pin (roles/beads_viewer/defaults/main.yml),
+    # refreshed only by playbooks/update-versions/perform-updates.yml -- no
+    # stripping needed anywhere, bv's filename is version-agnostic.
+    - name: Download and checksum-verify bv archive
+      ansible.builtin.get_url:
+        url: https://github.com/Dicklesworthstone/beads_viewer/releases/download/{{ beads_viewer_version }}/bv_linux_{{ beads_viewer_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /tmp/bv_linux_{{ beads_viewer_platform_map[ansible_facts['architecture']] }}.tar.gz
+        checksum: "sha256:{{ (beads_viewer_sha256_amd64 if ansible_facts['architecture'] == 'x86_64' else beads_viewer_sha256_arm64) }}"
+        mode: '0644'
+
+    - name: Extract bv binary to /usr/local/bin
+      ansible.builtin.unarchive:
+        src: /tmp/bv_linux_{{ beads_viewer_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+        include:
+          - bv

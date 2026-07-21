@@ -77,6 +77,10 @@
         state: present
         update_cache: false
 
+    # Run the async smoke server as root (the play's default become), NOT with
+    # become_user: dolt. The dolt user is created with create_home: false, so
+    # /home/dolt/.ansible_async does not exist and the async task cannot write
+    # its status file. Root can access the dolt-owned data dir regardless.
     - name: Start dolt sql-server for smoke test
       ansible.builtin.command:
         cmd: /usr/local/bin/dolt sql-server --config /etc/dolt/config.yaml

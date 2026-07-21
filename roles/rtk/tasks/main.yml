@@ -1,0 +1,41 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Check if rtk binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/rtk
+  register: rtk_stat
+
+# The stat gate is load-bearing: rtk_version is a static pin (see below),
+# not a live upstream query, so it carries no version-drift risk either way.
+# Without the gate, every converge would redundantly re-download and
+# re-extract the same pinned archive -- unarchive has no creates:-based
+# idempotency of its own.
+- name: Install rtk from a checksum-verified release archive
+  when: not rtk_stat.stat.exists
+  block:
+    # Only architectures listed in rtk_platform_map are supported.
+    - name: Verify supported processor architecture
+      ansible.builtin.assert:
+        that: "ansible_facts['architecture'] in rtk_platform_map"
+        fail_msg: >
+          Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+          Supported architectures are: {{ rtk_platform_map.keys() | list }}.
+
+    # rtk_version is a static pin (roles/rtk/defaults/main.yml), refreshed only
+    # by playbooks/update-versions/perform-updates.yml -- see Constitution
+    # Principle II. checksum: is a literal instead of a live checksums.txt URL
+    # fetch so re-converge never silently re-verifies against a newer release.
+    - name: Download and checksum-verify the rtk release archive
+      ansible.builtin.get_url:
+        url: "https://github.com/rtk-ai/rtk/releases/download/{{ rtk_version }}/{{ rtk_platform_map[ansible_facts['architecture']] }}"
+        dest: "/tmp/{{ rtk_platform_map[ansible_facts['architecture']] }}"
+        checksum: "sha256:{{ (rtk_sha256_x86_64_musl if ansible_facts['architecture'] == 'x86_64' else rtk_sha256_aarch64_gnu) }}"
+        mode: '0644'
+
+    - name: Install the verified rtk binary to /usr/local/bin
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ rtk_platform_map[ansible_facts['architecture']] }}"
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+      become: true

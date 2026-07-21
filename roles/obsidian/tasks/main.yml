@@ -1,0 +1,49 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - obsidian_version | length > 0
+      - obsidian_version is match('^v[0-9]+\.[0-9]+\.[0-9]+')
+      - obsidian_sha256_amd64 | length == 64
+    fail_msg: >-
+      Variable validation failed: obsidian_version must be a non-empty
+      `v`-prefixed semver tag (e.g. v1.12.7); obsidian_sha256_amd64 must be a
+      64-character SHA-256 hex digest.
+
+- name: Assert supported processor architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: >-
+      Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+      Obsidian's upstream releases (obsidianmd/obsidian-releases) publish an
+      amd64 .deb only — no arm64 .deb exists. This role must only be applied
+      to x86_64 hosts; the desktop play tags this role's entry with
+      not-supported-on-arm64 to skip it on ARM64 hosts.
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Determine if Obsidian installation is required
+  ansible.builtin.set_fact:
+    _obsidian_needs_install: >-
+      {{ 'obsidian' not in ansible_facts.packages or
+         ansible_facts.packages['obsidian'][0].version != (obsidian_version | regex_replace('^v', '')) }}
+
+- name: Download Obsidian release .deb
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/obsidianmd/obsidian-releases/releases/download/{{ obsidian_version }}/obsidian_{{ obsidian_version | regex_replace('^v', '') }}_amd64.deb
+    dest: "/tmp/obsidian_{{ obsidian_version | regex_replace('^v', '') }}_amd64.deb"
+    mode: '0644'
+    checksum: "sha256:{{ obsidian_sha256_amd64 }}"
+  when: _obsidian_needs_install
+
+- name: Install Obsidian
+  ansible.builtin.apt:
+    deb: "/tmp/obsidian_{{ obsidian_version | regex_replace('^v', '') }}_amd64.deb"
+    state: present
+    update_cache: true
+  when: _obsidian_needs_install

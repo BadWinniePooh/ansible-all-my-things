@@ -47,6 +47,46 @@
         src: "{{ _roles_dir }}/github_cli/defaults/main.yml"
       register: _github_cli_defaults_raw
 
+    - name: Read obsidian role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/obsidian/defaults/main.yml"
+      register: _obsidian_defaults_raw
+
+    - name: Read rtk role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/rtk/defaults/main.yml"
+      register: _rtk_defaults_raw
+
+    - name: Read beads_go role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/beads_go/defaults/main.yml"
+      register: _beads_go_defaults_raw
+
+    - name: Read beads_viewer role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/beads_viewer/defaults/main.yml"
+      register: _beads_viewer_defaults_raw
+
+    - name: Read beads_rust role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/beads_rust/defaults/main.yml"
+      register: _beads_rust_defaults_raw
+
+    - name: Read nodejs role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/nodejs/defaults/main.yml"
+      register: _nodejs_defaults_raw
+
+    - name: Read specify_cli role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/specify_cli/defaults/main.yml"
+      register: _specify_cli_defaults_raw
+
+    - name: Read claude_code role defaults
+      ansible.builtin.slurp:
+        src: "{{ _roles_dir }}/claude_code/defaults/main.yml"
+      register: _claude_code_defaults_raw
+
     - name: Extract current pinned values from role defaults
       vars:
         _java_id_match: >-
@@ -83,6 +123,38 @@
         current_github_cli_version: >-
           {{ _github_cli_defaults_raw.content | b64decode
              | regex_search('github_cli_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_obsidian_version: >-
+          {{ _obsidian_defaults_raw.content | b64decode
+             | regex_search('obsidian_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_rtk_version: >-
+          {{ _rtk_defaults_raw.content | b64decode
+             | regex_search('rtk_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_beads_go_version: >-
+          {{ _beads_go_defaults_raw.content | b64decode
+             | regex_search('beads_go_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_beads_viewer_version: >-
+          {{ _beads_viewer_defaults_raw.content | b64decode
+             | regex_search('beads_viewer_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_beads_rust_version: >-
+          {{ _beads_rust_defaults_raw.content | b64decode
+             | regex_search('beads_rust_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_node_version: >-
+          {{ _nodejs_defaults_raw.content | b64decode
+             | regex_search('node_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_specify_cli_version: >-
+          {{ _specify_cli_defaults_raw.content | b64decode
+             | regex_search('specify_cli_version:\s*"([^"]+)"', '\1')
+             | default([], true) | first }}
+        current_claude_code_version: >-
+          {{ _claude_code_defaults_raw.content | b64decode
+             | regex_search('claude_code_version:\s*"([^"]+)"', '\1')
              | default([], true) | first }}
 
     # --- Fetch upstream versions ---
@@ -141,6 +213,66 @@
     - name: Save GitHub CLI fetched tag
       ansible.builtin.set_fact:
         fetched_github_cli_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch Obsidian upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "obsidianmd/obsidian-releases"
+
+    - name: Save Obsidian fetched tag
+      ansible.builtin.set_fact:
+        fetched_obsidian_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch rtk upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "rtk-ai/rtk"
+
+    - name: Save rtk fetched tag
+      ansible.builtin.set_fact:
+        fetched_rtk_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch bd upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "gastownhall/beads"
+
+    - name: Save bd fetched tag
+      ansible.builtin.set_fact:
+        fetched_beads_go_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch bv upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "Dicklesworthstone/beads_viewer"
+
+    - name: Save bv fetched tag
+      ansible.builtin.set_fact:
+        fetched_beads_viewer_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch br upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "Dicklesworthstone/beads_rust"
+
+    - name: Save br fetched tag
+      ansible.builtin.set_fact:
+        fetched_beads_rust_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch Node.js upstream LTS version
+      ansible.builtin.include_tasks: tasks/fetch-nodejs-version.yml
+
+    - name: Fetch specify-cli upstream version
+      ansible.builtin.include_tasks: tasks/fetch-github-release.yml
+      vars:
+        github_repo: "github/spec-kit"
+
+    - name: Save specify-cli fetched tag
+      ansible.builtin.set_fact:
+        fetched_specify_cli_tag: "{{ fetched_github_tag }}"
+
+    - name: Fetch Claude Code upstream version and checksums
+      ansible.builtin.include_tasks: tasks/fetch-claude-code-version.yml
 
     # --- Compare and report ---
     - name: Report Flutter SDK version status
@@ -207,6 +339,70 @@
           upstream={{ fetched_github_cli_tag }},
           status={{ 'UP TO DATE' if current_github_cli_version == fetched_github_cli_tag else 'STALE' }}
 
+    - name: Report Obsidian version status
+      ansible.builtin.debug:
+        msg: >-
+          Obsidian:
+          current={{ current_obsidian_version }},
+          upstream={{ fetched_obsidian_tag }},
+          status={{ 'UP TO DATE' if current_obsidian_version == fetched_obsidian_tag else 'STALE' }}
+
+    - name: Report rtk version status
+      ansible.builtin.debug:
+        msg: >-
+          rtk:
+          current={{ current_rtk_version }},
+          upstream={{ fetched_rtk_tag }},
+          status={{ 'UP TO DATE' if current_rtk_version == fetched_rtk_tag else 'STALE' }}
+
+    - name: Report bd version status
+      ansible.builtin.debug:
+        msg: >-
+          bd:
+          current={{ current_beads_go_version }},
+          upstream={{ fetched_beads_go_tag }},
+          status={{ 'UP TO DATE' if current_beads_go_version == fetched_beads_go_tag else 'STALE' }}
+
+    - name: Report bv version status
+      ansible.builtin.debug:
+        msg: >-
+          bv:
+          current={{ current_beads_viewer_version }},
+          upstream={{ fetched_beads_viewer_tag }},
+          status={{ 'UP TO DATE' if current_beads_viewer_version == fetched_beads_viewer_tag else 'STALE' }}
+
+    - name: Report br version status
+      ansible.builtin.debug:
+        msg: >-
+          br:
+          current={{ current_beads_rust_version }},
+          upstream={{ fetched_beads_rust_tag }},
+          status={{ 'UP TO DATE' if current_beads_rust_version == fetched_beads_rust_tag else 'STALE' }}
+
+    - name: Report Node.js version status
+      ansible.builtin.debug:
+        msg: >-
+          Node.js:
+          current={{ current_node_version }},
+          upstream={{ fetched_nodejs_version }},
+          status={{ 'UP TO DATE' if current_node_version == fetched_nodejs_version else 'STALE' }}
+
+    - name: Report specify-cli version status
+      ansible.builtin.debug:
+        msg: >-
+          specify-cli:
+          current={{ current_specify_cli_version }},
+          upstream={{ fetched_specify_cli_tag }},
+          status={{ 'UP TO DATE' if current_specify_cli_version == fetched_specify_cli_tag else 'STALE' }}
+
+    - name: Report Claude Code version status
+      ansible.builtin.debug:
+        msg: >-
+          Claude Code:
+          current={{ current_claude_code_version }},
+          upstream={{ fetched_claude_code_version }},
+          status={{ 'UP TO DATE' if current_claude_code_version == fetched_claude_code_version else 'STALE' }}
+
     - name: Fail if any version pins are stale
       ansible.builtin.fail:
         msg: >-
@@ -219,4 +415,12 @@
         current_android_build != fetched_android_build or
         current_dolt_version != fetched_dolt_tag or
         current_opencode_version != fetched_opencode_tag or
-        current_github_cli_version != fetched_github_cli_tag
+        current_github_cli_version != fetched_github_cli_tag or
+        current_obsidian_version != fetched_obsidian_tag or
+        current_rtk_version != fetched_rtk_tag or
+        current_beads_go_version != fetched_beads_go_tag or
+        current_beads_viewer_version != fetched_beads_viewer_tag or
+        current_beads_rust_version != fetched_beads_rust_tag or
+        current_node_version != fetched_nodejs_version or
+        current_specify_cli_version != fetched_specify_cli_tag or
+        current_claude_code_version != fetched_claude_code_version

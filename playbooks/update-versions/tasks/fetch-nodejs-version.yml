@@ -1,0 +1,29 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Sets fact: fetched_nodejs_version (v-prefixed, e.g. "v24.18.0")
+#
+# nodejs.org is not GitHub-Releases-shaped, so this mirrors
+# roles/nodejs/tasks/main.yml's own (now-retired) inline LTS-resolution logic
+# rather than reusing fetch-github-release.yml.
+
+- name: Get Node.js release index
+  ansible.builtin.uri:
+    url: https://nodejs.org/dist/index.json
+    validate_certs: true
+    return_content: true
+  register: _nodejs_index
+
+- name: Resolve latest Node.js LTS versions
+  ansible.builtin.set_fact:
+    _nodejs_lts_versions: "{{ _nodejs_index.json | selectattr('lts') | map(attribute='version') | list }}"
+
+- name: Assert a Node.js LTS version was resolved
+  ansible.builtin.assert:
+    that: "_nodejs_lts_versions | length > 0"
+    fail_msg: >-
+      No LTS entry found in https://nodejs.org/dist/index.json -- cannot
+      resolve a Node.js version to compare/update against.
+
+- name: Set Node.js LTS version fact
+  ansible.builtin.set_fact:
+    fetched_nodejs_version: "{{ _nodejs_lts_versions[0] }}"

@@ -1,0 +1,23 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Clone oh-my-claudecode source repository
+  ansible.builtin.git:
+    repo: https://github.com/Yeachan-Heo/oh-my-claudecode
+    dest: /home/{{ item }}/Documents/Cline/oh-my-claudecode
+    version: main
+    update: yes
+    force: no
+  become: true
+  become_user: "{{ item }}"
+  loop: "{{ desktop_user_names }}"
+
+- name: Check whether omc CLI is already installed
+  ansible.builtin.command: which omc
+  failed_when: false
+  changed_when: false
+  register: omc_cli_check
+
+- name: Install OMC CLI
+  ansible.builtin.command: npm install --global --prefix /usr/local oh-my-claude-sisyphus
+  become: true
+  when: omc_cli_check.rc != 0

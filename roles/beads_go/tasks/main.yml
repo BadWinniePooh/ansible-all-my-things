@@ -1,0 +1,74 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Install git
+  ansible.builtin.apt:
+    name:
+      - git
+    state: present
+  become: true
+
+# -----
+# Install beads issue tracker (bd) from the gastownhall/beads GitHub release
+#
+# beads_go_version and the per-architecture checksums are static pins (see
+# roles/beads_go/defaults/main.yml), refreshed only by
+# playbooks/update-versions/perform-updates.yml -- there is no live
+# checksums.txt fetch left; get_url's checksum: param verifies against the
+# pinned literal and fails atomically (no partial file left) on mismatch.
+# System-wide install (single scalar stat gate, matching rtk) rather than
+# per-user: bd is a static per-architecture binary with no per-user state
+# (issue/config data lives in ~/.beads or project dirs regardless of binary
+# location). The stat gate avoids redundant re-download/re-extract of the
+# same pinned archive on every converge, same rationale as rtk.
+# -----
+
+- name: Check if bd binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/bd
+  register: bd_stat
+
+- name: Install bd from a checksum-verified release archive
+  when: not bd_stat.stat.exists
+  become: true
+  block:
+    - name: Verify supported processor architecture for bd
+      ansible.builtin.assert:
+        that: "ansible_facts['architecture'] in beads_go_platform_map"
+        fail_msg: >
+          Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+          Supported architectures are: {{ beads_go_platform_map.keys() | list }}.
+
+    # beads_go_version is a static pin (roles/beads_go/defaults/main.yml),
+    # refreshed only by playbooks/update-versions/perform-updates.yml -- see
+    # Constitution Principle II. The stripped filename-variant is still
+    # derived in-role from the single pinned raw tag.
+    - name: Derive stripped bd version from pinned tag
+      ansible.builtin.set_fact:
+        bd_version: "{{ beads_go_version | regex_replace('^v', '') }}"
+
+    - name: Download and checksum-verify bd archive
+      ansible.builtin.get_url:
+        url: https://github.com/gastownhall/beads/releases/download/{{ beads_go_version }}/beads_{{ bd_version }}_linux_{{ beads_go_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /tmp/beads_{{ bd_version }}_linux_{{ beads_go_platform_map[ansible_facts['architecture']] }}.tar.gz
+        checksum: "sha256:{{ (beads_go_sha256_amd64 if ansible_facts['architecture'] == 'x86_64' else beads_go_sha256_arm64) }}"
+        mode: '0644'
+
+    - name: Extract bd binary to /usr/local/bin
+      ansible.builtin.unarchive:
+        src: /tmp/beads_{{ bd_version }}_linux_{{ beads_go_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+        include:
+          - bd
+
+- name: Clone beads source repository
+  ansible.builtin.git:
+    repo: https://github.com/gastownhall/beads.git
+    dest: /home/{{ item }}/Documents/Cline/beads
+    version: main
+    update: yes
+    force: no
+  become: true
+  become_user: "{{ item }}"
+  loop: "{{ desktop_user_names }}"

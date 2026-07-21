@@ -23,5 +23,3 @@ shell commands, and other important information, read the current plan:
 
 This file must not be extended. Write to `AGENTS.md` or the constitution
 instead.
-
-

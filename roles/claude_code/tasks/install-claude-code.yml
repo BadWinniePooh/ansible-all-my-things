@@ -2,114 +2,65 @@
 ---
 # Only ansible platforms listed in claude_code_platform_map are supported.
 - name: "Verify supported processor architecture"
-  assert:
+  ansible.builtin.assert:
     that: "ansible_facts['architecture'] in claude_code_platform_map"
     fail_msg: >
      Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
      Supported architectures are: {{ claude_code_platform_map.keys() | list }}.
 
-# -----
-# Get checksums for claude binaries by architecture from the release manifest
-# -----
-
-- name: Get latest Claude Code version from GitHub Releases
-  uri:
-    url: https://api.github.com/repos/anthropics/claude-code/releases/latest
-    headers:
-      Accept: "application/vnd.github+json"
-    validate_certs: true
-    return_content: true
-  register: claude_code_github_release
-
-- name: Extract Claude Code version number from GitHub release tag
-  set_fact:
-    claude_code_version: "{{ claude_code_github_release.json.tag_name | regex_replace('^v', '') }}"
-
-- name: Fetch Claude Code release manifest
-  uri:
-    url: "{{ claude_code_manifest_base_url }}/{{ claude_code_version }}/manifest.json"
-    validate_certs: true
-    return_content: true
-  register: claude_code_manifest
-
-- name: Extract expected Claude Code checksum from release manifest
-  set_fact:
-    claude_code_expected_checksum: "{{ claude_code_manifest.json.platforms[claude_code_platform_map[ansible_facts['architecture']]].checksum }}"
+# claude_code_version + per-platform checksums are static pins
+# (roles/claude_code/defaults/main.yml), refreshed only by
+# playbooks/update-versions/perform-updates.yml -- see Constitution
+# Principle II. This converges claude_code's idempotency model onto the same
+# stat-gate-before-download shape used by rtk/beads/nodejs (verify-before-
+# placement instead of always-reinstall + reverify-after-the-fact).
+- name: Select expected checksum for this architecture
+  ansible.builtin.set_fact:
+    claude_code_expected_checksum: >-
+      {{ claude_code_sha256_linux_x64 if ansible_facts['architecture'] == 'x86_64'
+         else claude_code_sha256_linux_arm64 }}
 
 # -----
 # Install Claude Code for each desktop user
 # -----
 
 - name: Check if Claude Code binary already exists for each user
-  stat:
+  ansible.builtin.stat:
     path: /home/{{ item }}/.local/bin/claude
   loop: "{{ desktop_user_names }}"
   register: claude_code_pre_install_stat
 
-# Installation instructions can be found in the quickstart guide at
-# https://code.claude.com/docs/en/quickstart
-- name: Download Claude Code installer
-  get_url:
-    url: https://claude.ai/install.sh
-    dest: /tmp/claude_code_install.sh
+- name: Ensure each user's ~/.local/bin exists
+  ansible.builtin.file:
+    path: /home/{{ item }}/.local/bin
+    state: directory
+    owner: "{{ item }}"
     mode: '0755'
-  when: claude_code_pre_install_stat.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
-
-- name: Run Claude Code installer
-  shell: /tmp/claude_code_install.sh
-  args:
-    executable: /bin/bash
   become: true
-  become_user: "{{ item }}"
   loop: "{{ desktop_user_names }}"
   when: not (claude_code_pre_install_stat.results | selectattr('item', 'equalto', item) | first).stat.exists
 
-- name: Remove Claude Code installer
-  file:
-    path: /tmp/claude_code_install.sh
-    state: absent
-  when: claude_code_pre_install_stat.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
-
-# -----
-# Verify Claude Code binary integrity
-# -----
-
-- name: Compute SHA256 of installed Claude Code binary
-  stat:
-    path: /home/{{ item }}/.local/bin/claude
-    checksum_algorithm: sha256
-    follow: true
+# The direct binary URL mirrors the pattern claude.ai/install.sh itself uses
+# (confirmed against a live fetch): <base>/<version>/<platform>/claude. This
+# lets get_url verify the checksum BEFORE placement instead of installing
+# unconditionally and reverifying the installed binary after the fact.
+- name: Download and checksum-verify the Claude Code binary
+  ansible.builtin.get_url:
+    url: "{{ claude_code_manifest_base_url }}/{{ claude_code_version }}/{{ claude_code_platform_map[ansible_facts['architecture']] }}/claude"
+    dest: /home/{{ item }}/.local/bin/claude
+    checksum: "sha256:{{ claude_code_expected_checksum }}"
+    owner: "{{ item }}"
+    mode: '0755'
+  become: true
   loop: "{{ desktop_user_names }}"
-  register: claude_code_binary_stat
-
-- name: Remove Claude Code binary on checksum mismatch
-  file:
-    path: /home/{{ item.item }}/.local/bin/claude
-    state: absent
-  loop: "{{ claude_code_binary_stat.results }}"
-  when: >
-    not item.stat.exists
-    or item.stat.checksum != claude_code_expected_checksum
-
-- name: Fail on Claude Code binary checksum mismatch
-  fail:
-    msg: >
-      Claude Code binary integrity check failed for user {{ item.item }}.
-      Expected checksum: {{ claude_code_expected_checksum }}.
-      Actual checksum:   {{ item.stat.checksum | default('N/A') }}.
-  loop: "{{ claude_code_binary_stat.results }}"
-  when: >
-    not item.stat.exists
-    or item.stat.checksum != claude_code_expected_checksum
+  when: not (claude_code_pre_install_stat.results | selectattr('item', 'equalto', item) | first).stat.exists
 
 # -----
 # Ensure Claude Code is in PATH for each desktop user
-#
-# This is deliberately done only after the binary has been verified
 # -----
 
 - name: Add claude to PATH in .bashrc
-  blockinfile:
+  ansible.builtin.blockinfile:
     path: /home/{{ item }}/.bashrc
     block: "export PATH=\"$HOME/.local/bin:$PATH\""
     marker: "# {mark} ANSIBLE MANAGED BLOCK - Claude Code PATH"

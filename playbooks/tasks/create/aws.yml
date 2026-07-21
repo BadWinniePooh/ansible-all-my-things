@@ -196,6 +196,11 @@
       failed_when: false
       changed_when: true
 
+    # Windows and Linux diverge in two ways that both the connection wait and
+    # the inventory build below depend on: the login user (Administrator vs
+    # ubuntu) and the OS host-group. The group must be profile-derived, not a
+    # static 'linux', so Windows hosts are not wrongly added to 'linux'
+    # (FR-004, spec 015-aws-windows-profile).
     - name: Set OS inventory group and SSH user by profile
       ansible.builtin.set_fact:
         aws_os_group: "{{ 'windows' if profile == 'windows' else 'linux' }}"

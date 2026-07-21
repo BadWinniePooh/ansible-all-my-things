@@ -140,7 +140,7 @@ rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
 Overall average: **60-90% token reduction** on common development operations.
 <!-- /rtk-instructions -->
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ccf33ec3 -->
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -160,86 +160,96 @@ bd close <id>         # Complete work
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
-**NEVER run `bd list --all`** — at ~350 issues it enters an unbounded output loop (5.6 GB,
-100% CPU, SIGKILL, nearly fills the 17 GB agent disk). For bulk reads, query
-`.beads/issues.jsonl` directly with `grep`/`jq`. For live queries use only scoped
-commands: `bd ready`, `bd list --status <s>`, `bd list --priority <p>`, `bd show <id>`.
-If unavoidable, bound it: `timeout 20 bd list --all`. (Bug tracked: 1fg7)
-
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+
+## Agent Context Profiles
+
+The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
+
+- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
 
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
+1. **File issues for remaining work** - Create beads for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Handle git/sync by active profile**:
    ```bash
+   # Conservative/minimal/default: report status and proposed commands; wait for approval.
+   git status
+
+   # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
    bd dolt push
    git push
-   git status  # MUST show "up to date with origin"
+   git status
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+**Critical rules:**
+- Explicit user or orchestrator instructions override this Beads block.
+- Do not commit or push without clear authority from the active profile or the current user request.
+- If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 <!-- markdownlint-enable MD013 MD022 MD025 MD031 MD032 MD034 -->
 
 ## Beads: Data Safety and Workflow Rules
 
-### Export after every mutation (bd v1.0.4)
+### `.beads/issues.jsonl` is git-tracked
 
-<!-- bd-version: 1.0.4 -->
+`.beads/issues.jsonl` is intentionally force-added and tracked in git — the
+root `.gitignore` uses `.beads/*` with `!.beads/issues.jsonl` and
+`!.beads/config.yaml` negations, because a directory-pattern ignore blocks
+any later negation from any ignore file (including a clone-local
+`.git/info/exclude` written by a future `bd init`), so the whitelist must
+live in the tracked `.gitignore`. This makes the file survive across clones
+even without a Dolt remote sync.
 
-On bd v1.0.4 every command prints `auto-importing N bytes ... into empty
-database` and rehydrates the working DB from `.beads/issues.jsonl`. A mutation
-not yet flushed to the JSONL file is **silently reverted** by the next
-command's re-import. Observed data loss: a `bd dep rm` rolled back before the
-next command saw it; a later `bd dep add` then reported a phantom cycle.
-
-**Mandatory workaround (bd 1.0.4 only):** export after **every** mutation —
-never bundle exports at the end of a response:
+`.beads/config.yaml` sets `export: auto: false` — auto-export is off.
+bd's auto-export hardcodes memories, infra, templates, and gates out of
+every write (`includeMemories=false`, unconditionally — GH#3650: memories
+may hold private agent context that must not land in git history via the
+automatic path), and there is no config key to change that scope
+(`export.auto`, `export.path`, `export.interval`, `export.git-add` are the
+only auto-export keys). Since we want memories captured too, auto-export is
+disabled entirely in favor of a manual, full export:
 
 ```bash
 bd export --all -o .beads/issues.jsonl   # run after EACH bd mutation
 ```
 
-Re-evaluate when a bd release fixes auto-import without the v1.0.5 regression.
+**Always use `--all`, never plain `bd export` and never re-enable
+`export.auto`, on this file.** Verified: bd's own overwrite guard compares
+the new write's scope against what is already in the file — if a
+narrower-scope write (e.g. a plain `bd export`, or auto-export) follows a
+`--all` write, it refuses to overwrite (`auto-export shrink guard: refusing
+to overwrite ... contains N record(s) outside auto-export scope`) and every
+later export silently stops updating the file until manually repaired.
+Consistency of scope, not any single flag, is what keeps this working.
 
-### Never commit `.beads/issues.jsonl`
+Staging and committing the file still follow the normal Agent Context
+Profile git policy above (Conservative default: report status, do not
+commit without being asked). Bundle the export once per response, after all
+bd operations in that response are done — not once per individual `bd`
+command.
 
-`.beads/issues.jsonl` is gitignored and MUST NOT be `git add`ed or committed,
-even though the export step above still writes it locally on every mutation.
-It regenerates on every single issue create/claim/close; committing it
-drowns real code changes in noise commits. bd's Dolt-backed sync
-(`refs/dolt/data`) is the actual cross-machine sync mechanism — this file is
-a local-only convenience export, redundant with it.
+bd's Dolt-backed sync (`refs/dolt/data`) remains available as a secondary
+mechanism, but the tracked, `--all`-exported JSONL is the primary durability
+path here: issues and memories are both recoverable from a plain git clone
+without ever needing `bd dolt pull`.
 
-### Suppress git-add warning
+### Never run `bd list --all`
 
-If you see `auto-export: git add failed: exit status 1` after a bd mutation,
-the cause is `export.git-add=true` (default) trying to stage
-`.beads/issues.jsonl`, which is gitignored. Fix permanently:
-
-```yaml
-# .beads/config.yaml
-export:
-  git-add: false
-```
-
-This keeps local export (beads viewer stays in sync) while disabling git
-staging.
+**NEVER run `bd list --all`** — at ~350 issues it enters an unbounded output
+loop (5.6 GB, 100% CPU, SIGKILL, nearly fills the 17 GB agent disk). For bulk
+reads, query `.beads/issues.jsonl` directly with `grep`/`jq`. For live queries
+use only scoped commands: `bd ready`, `bd list --status <s>`,
+`bd list --priority <p>`, `bd show <id>`. If unavoidable, bound it:
+`timeout 20 bd list --all`. (Bug tracked: 1fg7)
 
 ### Findings are always tied to WIP
 
@@ -404,3 +414,4 @@ Architecture Decision Records are in
 
 These are the canonical locations for architectural decisions; they MUST
 NOT be recorded in `CLAUDE.md` or agent-specific context files.
+

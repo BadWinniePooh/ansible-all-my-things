@@ -10,10 +10,6 @@
       x86_64:  'https://api2.cursor.sh/updates/download/golden/linux-x64-deb/cursor/'
       aarch64: 'https://api2.cursor.sh/updates/download/golden/linux-arm64-deb/cursor/'
 
-- name: Debug print the download URL
-  debug:
-    msg: "Cursor download URL is {{ cursor_download_url }}"
-
 - name: Download Cursor
   get_url:
     url: "{{ cursor_download_url }}"

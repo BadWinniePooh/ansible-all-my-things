@@ -19,7 +19,10 @@ Or run all Molecule tests from the project root:
 ./scripts/test-molecule-all.sh
 ```
 
-All phases MUST pass before committing.
+This script discovers every role with a `molecule/default/molecule.yml`
+scenario, tests each even if one fails, and exits `1` if any failed. It is the
+canonical discovery mechanism for CI — invoke it rather than reimplementing the
+scan. All phases MUST pass before committing.
 
 ## Running a Single Role on a Live Host
 

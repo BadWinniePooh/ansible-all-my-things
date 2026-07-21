@@ -29,6 +29,21 @@
         fail_msg: "Claude Code binary not found at /home/testuser/.local/bin/claude"
         success_msg: "Claude Code binary found at /home/testuser/.local/bin/claude"
 
+    - name: Run rtk init -g as testuser
+      ansible.builtin.command:
+        cmd: rtk init -g
+      become: true
+      become_user: testuser
+      changed_when: false
+      register: rtk_init_result
+
+    - name: Assert rtk init -g succeeded
+      ansible.builtin.assert:
+        that:
+          - rtk_init_result.rc == 0
+        fail_msg: "rtk init -g failed with rc {{ rtk_init_result.rc }}"
+        success_msg: "rtk init -g succeeded for testuser"
+
     - name: Check Oh My Claude Code plugin cache directory exists
       ansible.builtin.stat:
         path: /home/testuser/.claude/plugins/cache/omc/oh-my-claudecode
@@ -40,54 +55,6 @@
           - omc_cache_stat.stat.exists
         fail_msg: "Oh My Claude Code not found at /home/testuser/.claude/plugins/cache/omc/oh-my-claudecode"
         success_msg: "Oh My Claude Code found at /home/testuser/.claude/plugins/cache/omc/oh-my-claudecode"
-
-    - name: Check beads binary exists
-      ansible.builtin.stat:
-        path: /home/testuser/.local/bin/bd
-      register: beads_stat
-
-    - name: Assert beads is installed
-      ansible.builtin.assert:
-        that:
-          - beads_stat.stat.exists
-        fail_msg: "beads binary not found at /home/testuser/.local/bin/bd"
-        success_msg: "beads binary found at /home/testuser/.local/bin/bd"
-
-    - name: Check beads viewer binary exists
-      ansible.builtin.stat:
-        path: /home/testuser/.local/bin/bv
-      register: bv_binary
-
-    - name: Assert beads viewer is installed
-      ansible.builtin.assert:
-        that:
-          - bv_binary.stat.exists
-        fail_msg: "beads viewer (bv) binary not found"
-        success_msg: "beads viewer (bv) binary found at /home/testuser/.local/bin/bv"
-
-    - name: Check oh-my-claudecode source repository exists
-      ansible.builtin.stat:
-        path: /home/testuser/Documents/Cline/oh-my-claudecode/.git
-      register: omc_src_stat
-
-    - name: Assert oh-my-claudecode source repository is cloned
-      ansible.builtin.assert:
-        that:
-          - omc_src_stat.stat.exists
-        fail_msg: "oh-my-claudecode source repo not found at /home/testuser/Documents/Cline/oh-my-claudecode/.git"
-        success_msg: "oh-my-claudecode source repo found at /home/testuser/Documents/Cline/oh-my-claudecode/.git"
-
-    - name: Check beads source repository exists
-      ansible.builtin.stat:
-        path: /home/testuser/Documents/Cline/beads/.git
-      register: beads_src_stat
-
-    - name: Assert beads source repository is cloned
-      ansible.builtin.assert:
-        that:
-          - beads_src_stat.stat.exists
-        fail_msg: "beads source repo not found at /home/testuser/Documents/Cline/beads/.git"
-        success_msg: "beads source repo found at /home/testuser/Documents/Cline/beads/.git"
 
     - name: Check jq is installed
       ansible.builtin.stat:
@@ -101,22 +68,6 @@
         fail_msg: "jq not found at /usr/bin/jq"
         success_msg: "jq found at /usr/bin/jq"
 
-    - name: Check omc CLI is available
-      ansible.builtin.shell: source ~/.nvm/nvm.sh && omc --version
-      args:
-        executable: /bin/bash
-      become: true
-      become_user: testuser
-      register: omc_version_result
-      changed_when: false
-
-    - name: Assert omc CLI is available
-      ansible.builtin.assert:
-        that:
-          - omc_version_result.rc == 0
-        fail_msg: "omc --version failed with rc {{ omc_version_result.rc }}"
-        success_msg: "omc CLI available"
-
     - name: Read settings.json
       ansible.builtin.slurp:
         src: /home/testuser/.claude/settings.json
@@ -128,22 +79,12 @@
           - settings.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS == "1"
           - settings.env.CLAUDE_CODE_SPAWN_BACKEND == "tmux"
           - settings.teammateMode == "tmux"
-        fail_msg: "settings.json missing required agent-team keys"
-        success_msg: "settings.json contains all required agent-team keys"
+          - settings.env.DISABLE_AUTOUPDATER == "1"
+          - settings.env.DISABLE_UPDATES == "1"
+        fail_msg: "settings.json missing required agent-team keys or auto-update-disable keys"
+        success_msg: "settings.json contains all required agent-team keys and auto-update-disable keys"
       vars:
         settings: "{{ settings_file.content | b64decode | from_json }}"
-
-    - name: Check rtk binary exists
-      ansible.builtin.stat:
-        path: /usr/local/bin/rtk
-      register: rtk_stat
-
-    - name: Assert rtk is installed
-      ansible.builtin.assert:
-        that:
-          - rtk_stat.stat.exists
-        fail_msg: "rtk binary not found at /usr/local/bin/rtk"
-        success_msg: "rtk binary found at /usr/local/bin/rtk"
 
     - name: Check rtk hook is configured in settings.json
       ansible.builtin.shell: >
@@ -175,21 +116,6 @@
         fail_msg: "bd list --all guard hook not found in settings.json PreToolUse hooks"
         success_msg: "bd list --all guard hook configured in settings.json"
 
-    - name: Run rtk init -g as testuser
-      ansible.builtin.command:
-        cmd: rtk init -g
-      become: true
-      become_user: testuser
-      changed_when: false
-      register: rtk_init_result
-
-    - name: Assert rtk init -g succeeded
-      ansible.builtin.assert:
-        that:
-          - rtk_init_result.rc == 0
-        fail_msg: "rtk init -g failed with rc {{ rtk_init_result.rc }}"
-        success_msg: "rtk init -g succeeded for testuser"
-
     - name: Check context7 plugin cache directory exists
       ansible.builtin.stat:
         path: /home/testuser/.claude/plugins/cache/claude-plugins-official/context7
@@ -216,22 +142,6 @@
         fail_msg: "context7 not found in 'claude mcp list' output"
         success_msg: "context7 MCP server is registered"
 
-    - name: Run specify --version as testuser
-      ansible.builtin.command: specify --version
-      become: true
-      become_user: testuser
-      environment:
-        PATH: "/home/testuser/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      register: specify_version_result
-      changed_when: false
-
-    - name: Assert specify --version succeeds
-      ansible.builtin.assert:
-        that:
-          - specify_version_result.rc == 0
-        fail_msg: "specify --version failed with rc {{ specify_version_result.rc }}"
-        success_msg: "specify-cli available: {{ specify_version_result.stdout }}"
-
     - name: Check exa MCP server is configured
       ansible.builtin.shell: /home/testuser/.local/bin/claude mcp list
       become: true
@@ -245,18 +155,6 @@
           - "'exa' in exa_mcp_list_result.stdout"
         fail_msg: "exa MCP server not found in 'claude mcp list' output"
         success_msg: "exa MCP server is configured"
-
-    - name: Check ai-agent-workspace repository exists
-      ansible.builtin.stat:
-        path: /home/testuser/Documents/Cline/ai-agent-workspace/.git
-      register: workspace_repo_stat
-
-    - name: Assert ai-agent-workspace repository is cloned
-      ansible.builtin.assert:
-        that:
-          - workspace_repo_stat.stat.exists
-        fail_msg: "ai-agent-workspace not found at /home/testuser/Documents/Cline/ai-agent-workspace/.git"
-        success_msg: "ai-agent-workspace repository cloned"
 
     - name: Check commit skill symlink exists
       ansible.builtin.stat:
@@ -284,3 +182,29 @@
           - commit_skill_follow_stat.stat.exists
         fail_msg: "commit skill symlink is dangling"
         success_msg: "commit skill symlink resolves to real directory"
+
+    - name: Check oh-my-claudecode source repository exists
+      ansible.builtin.stat:
+        path: /home/testuser/Documents/Cline/oh-my-claudecode/.git
+      register: omc_src_stat
+
+    - name: Assert oh-my-claudecode source repository is cloned
+      ansible.builtin.assert:
+        that:
+          - omc_src_stat.stat.exists
+        fail_msg: "oh-my-claudecode source repo not found at /home/testuser/Documents/Cline/oh-my-claudecode/.git"
+        success_msg: "oh-my-claudecode source repo found at /home/testuser/Documents/Cline/oh-my-claudecode/.git"
+
+    - name: Check omc CLI is available
+      ansible.builtin.command: omc --version
+      become: true
+      become_user: testuser
+      register: omc_version_result
+      changed_when: false
+
+    - name: Assert omc CLI is available
+      ansible.builtin.assert:
+        that:
+          - omc_version_result.rc == 0
+        fail_msg: "omc --version failed with rc {{ omc_version_result.rc }}"
+        success_msg: "omc CLI available"

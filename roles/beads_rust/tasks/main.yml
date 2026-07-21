@@ -1,0 +1,75 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Install git
+  ansible.builtin.apt:
+    name:
+      - git
+    state: present
+  become: true
+
+# -----
+# Install beads Rust issue tracker (br) from the Dicklesworthstone/beads_rust
+# GitHub release
+#
+# beads_rust_version and the per-architecture checksums are static pins (see
+# roles/beads_rust/defaults/main.yml), refreshed only by
+# playbooks/update-versions/perform-updates.yml -- there is no live
+# checksums.sha256 fetch left; get_url's checksum: param verifies against the
+# pinned literal and fails atomically (no partial file left) on mismatch.
+# System-wide install (single scalar stat gate, matching beads_go) rather than
+# per-user: br is a static per-architecture binary with no per-user state
+# (issue/config data lives in ~/.beads or project dirs regardless of binary
+# location). The stat gate avoids redundant re-download/re-extract of the
+# same pinned archive on every converge, same rationale as beads_go.
+# -----
+
+- name: Check if br binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/br
+  register: br_stat
+
+- name: Install br from a checksum-verified release archive
+  when: not br_stat.stat.exists
+  become: true
+  block:
+    - name: Verify supported processor architecture for br
+      ansible.builtin.assert:
+        that: "ansible_facts['architecture'] in beads_rust_platform_map"
+        fail_msg: >
+          Unsupported processor architecture: {{ ansible_facts['architecture'] }}.
+          Supported architectures are: {{ beads_rust_platform_map.keys() | list }}.
+
+    # beads_rust_version is a static pin (roles/beads_rust/defaults/main.yml),
+    # refreshed only by playbooks/update-versions/perform-updates.yml -- see
+    # Constitution Principle II. The stripped filename-variant is still
+    # derived in-role from the single pinned raw tag.
+    - name: Derive stripped br version from pinned tag
+      ansible.builtin.set_fact:
+        br_version: "{{ beads_rust_version | regex_replace('^v', '') }}"
+
+    - name: Download and checksum-verify br archive
+      ansible.builtin.get_url:
+        url: https://github.com/Dicklesworthstone/beads_rust/releases/download/{{ beads_rust_version }}/br-{{ br_version }}-linux_{{ beads_rust_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /tmp/br-{{ br_version }}-linux_{{ beads_rust_platform_map[ansible_facts['architecture']] }}.tar.gz
+        checksum: "sha256:{{ (beads_rust_sha256_amd64 if ansible_facts['architecture'] == 'x86_64' else beads_rust_sha256_arm64) }}"
+        mode: '0644'
+
+    - name: Extract br binary to /usr/local/bin
+      ansible.builtin.unarchive:
+        src: /tmp/br-{{ br_version }}-linux_{{ beads_rust_platform_map[ansible_facts['architecture']] }}.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        mode: '0755'
+        include:
+          - br
+
+- name: Clone beads_rust source repository
+  ansible.builtin.git:
+    repo: https://github.com/Dicklesworthstone/beads_rust.git
+    dest: /home/{{ item }}/Documents/Cline/beads_rust
+    version: main
+    update: yes
+    force: no
+  become: true
+  become_user: "{{ item }}"
+  loop: "{{ desktop_user_names }}"

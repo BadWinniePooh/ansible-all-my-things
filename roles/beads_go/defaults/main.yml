@@ -1,0 +1,21 @@
+#SPDX-License-Identifier: MIT-0
+---
+# Pinned bd (gastownhall/beads) release tag (v-prefixed). See
+# https://github.com/gastownhall/beads/releases for available versions.
+# Updated automatically by playbooks/update-versions/perform-updates.yml.
+beads_go_version: "v1.1.0"
+
+# Maps Ansible architecture facts to the Go release filename fragment used by
+# bd (gastownhall/beads), which follows the {x86_64: amd64, aarch64: arm64}
+# archive naming convention.
+beads_go_platform_map:
+  x86_64: amd64
+  aarch64: arm64
+
+# SHA-256 checksums for the linux release archives (amd64 and arm64).
+# Compute (download to file first -- pipe-only sha256sum can truncate and
+# give the wrong hash):
+#   curl -sL https://github.com/gastownhall/beads/releases/download/<tag>/beads_<ver>_linux_<arch>.tar.gz -o /tmp/bd.tar.gz
+#   sha256sum /tmp/bd.tar.gz
+beads_go_sha256_amd64: "b0f3dd607c3fb989ee08d0a6854fba80d0402971eb108f9af6170bc14d491a34"
+beads_go_sha256_arm64: "e64eb6f5f998c9eae3ef9ec786f5f1c907ab3ed04fe220ebf265ca9952e21b2f"
