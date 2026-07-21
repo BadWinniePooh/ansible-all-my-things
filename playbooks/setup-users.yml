@@ -20,6 +20,34 @@
         name: ssh
         state: restarted
 
+  pre_tasks:
+    # Guards the vault contract before any account is created. Also catches
+    # vault files predating the vault_desktop_users list, which defined one
+    # vault_<name> mapping per user instead.
+    - name: Assert desktop users are defined in the vault
+      ansible.builtin.assert:
+        that:
+          - vault_desktop_users is defined
+          - vault_desktop_users | length > 0
+        fail_msg: >-
+          vault_desktop_users is missing or empty in
+          inventories/group_vars/all/vault.yml. Define at least one desktop
+          user there as a list of entries with name, password and
+          exa_api_key. See inventories/group_vars/all/vault-template.yml.
+
+    - name: Assert every desktop user entry is complete
+      no_log: true # Prevent logging the passwords
+      ansible.builtin.assert:
+        that:
+          - item.name is defined and item.name | length > 0
+          - item.password is defined and item.password | length > 0
+          - item.exa_api_key is defined and item.exa_api_key | length > 0
+        fail_msg: >-
+          An entry in vault_desktop_users is incomplete. Every entry needs a
+          non-empty name, password and exa_api_key. See
+          inventories/group_vars/all/vault-template.yml.
+      loop: "{{ vault_desktop_users }}"
+
   tasks:
     - name: Setup accounts "{{ all_users | map(attribute='name') | join(', ') }}"
       no_log: true # Prevent logging the passwords

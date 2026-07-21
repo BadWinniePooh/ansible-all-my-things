@@ -341,7 +341,7 @@ Load your SSH key, then connect using `ansible_host` from the output:
 ```shell
 ssh-add ~/.ssh/id_ansible_ed25519
 
-# On Linux, galadriel is the default desktop user
+# On Linux, use a desktop user from vault_desktop_users, e.g. galadriel
 ssh galadriel@<ip>
 
 # On Windows, only Administrator is configured as a user
@@ -350,8 +350,8 @@ ssh Administrator@<ip>
 
 ## Connect using RDP
 
-Connect via an RDP compatible client. For Linux, use the `galadriel`
-user, on Windows connect as `Administrator`.
+Connect via an RDP compatible client. For Linux, use one of the
+`vault_desktop_users` accounts, on Windows connect as `Administrator`.
 
 ## Delete the VM
 

@@ -2,8 +2,9 @@
 
 ## Log in as the desktop user
 
-The username of the desktop user is configured in
-`/inventories/group_vars/all/vars.yml`. Here, we assume it is `galadriel`.
+The username of the desktop user is configured as `vault_desktop_users` in
+the encrypted `/inventories/group_vars/all/vault.yml`. The examples below
+assume it is `galadriel`; substitute the name you configured.
 
 The section [Important Concepts](./important-concepts.md) provides more
 information about the different users and their purposes.

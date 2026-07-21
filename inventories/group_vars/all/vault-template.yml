@@ -15,12 +15,20 @@ vault_gnome_keyring_password: "PROVIDE_GNOME_KEYRING_PASSWORD_HERE"
 
 vault_windows_admin_password: "PROVIDE_STRONG_WINDOWS_PASSWORD_HERE"
 
-# Desktop user passwords
-vault_galadriel:
-  password: "PROVIDE_GALADRIELS_PASSWORD_HERE"
-  exa_api_key: "PROVIDE_GALADRIELS_EXA_API_KEY_HERE"
-
-vault_legolas:
-  password: "PROVIDE_LEGOLAS_PASSWORD_HERE"
-  exa_api_key: "PROVIDE_LEGOLAS_EXA_API_KEY_HERE"
+# Desktop user accounts created on every managed host. This list is the
+# single definition of who exists: add, rename or remove an entry here and
+# nothing outside this file needs to change. At least one entry is required.
+#
+# name:        Linux account name (also the login name for SSH and the
+#              desktop session).
+# password:    Login password for that account.
+# exa_api_key: Exa API key wired into the user's MCP configuration. Any
+#              placeholder string works when Exa search is not used.
+vault_desktop_users:
+  - name: "PROVIDE_USER_NAME_HERE"
+    password: "PROVIDE_USER_PASSWORD_HERE"
+    exa_api_key: "PROVIDE_USER_EXA_API_KEY_HERE"
+#  - name: "PROVIDE_SECOND_USER_NAME_HERE"
+#    password: "PROVIDE_SECOND_USER_PASSWORD_HERE"
+#    exa_api_key: "PROVIDE_SECOND_USER_EXA_API_KEY_HERE"
 

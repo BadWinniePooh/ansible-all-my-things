@@ -80,16 +80,18 @@ This `my_ansible_user` is configured in [/inventories/group_vars/all/vars.yml](.
 
 ## Desktop user accounts are used to log in
 
-[/inventories/group_vars/all/vars.yml](../inventories/group_vars/all/vars.yml) defines user names and passwords for the `desktop_users`. These accounts are intended for logging into the (desktop) environment.
+The vault file defines the `vault_desktop_users` list — user names, passwords and API keys together. These accounts are intended for logging into the (desktop) environment. [/inventories/group_vars/all/vars.yml](../inventories/group_vars/all/vars.yml) only exposes that list to the playbooks as `desktop_users`; adding, renaming or removing a user is a change to the vault file alone.
 
-Desktop user passwords use a nested structure in the vault file. For example:
+Each entry carries the account name, its password and an Exa API key:
 
 ```yaml
-vault_galadriel:
-  password: "YOUR_PASSWORD_HERE"
-
-vault_legolas:
-  password: "YOUR_PASSWORD_HERE"
+vault_desktop_users:
+  - name: "YOUR_USER_NAME_HERE"
+    password: "YOUR_PASSWORD_HERE"
+    exa_api_key: "YOUR_EXA_API_KEY_HERE"
+  - name: "YOUR_SECOND_USER_NAME_HERE"
+    password: "YOUR_PASSWORD_HERE"
+    exa_api_key: "YOUR_EXA_API_KEY_HERE"
 ```
 
 The corresponding template file shows the complete structure of the secrets file: [/inventories/group_vars/all/vault-template.yml](../inventories/group_vars/all/vault-template.yml).
