@@ -158,36 +158,35 @@ records, the name pool, the presets or the host keys.
   flags that the interface exists to eliminate, and an empty host directory would blank out
   every default file.
 
-## 7. Hidden directory inside an inventory directory — **VERIFY**
+## 7. Hidden directory inside an inventory directory — **CONFIRMED**
 
 **Decision**: place application state in `.webui/` inside `/ansible/inventories`.
 
-**Why it needs verifying**: `ansible.cfg` sets `inventory = ./inventories`, so Ansible
+**Why it needed verifying**: `ansible.cfg` sets `inventory = ./inventories`, so Ansible
 parses that directory as an inventory source. Any file it tries to parse and cannot
 understand is a hard failure. The design assumes Ansible skips entries beginning with a dot
 when scanning an inventory directory.
 
-**Verification**: place a deliberately invalid file at `inventories/.webui/probe.yml` and
-run any playbook. Success confirms the assumption.
+**Verification result**: placed a deliberately invalid file at `inventories/.webui/probe.yml`
+(`this is: not: valid: inventory: [ syntax`) and ran `ansible-inventory --graph` (ansible-core
+2.17.14). It completed cleanly with no parse error, confirming Ansible skips the hidden
+directory entirely. The probe file was removed afterwards. No `ansible.cfg` change is needed.
 
-**Fallback if the assumption is wrong**: add the directory to the existing
-`inventory_ignore_patterns` in `ansible.cfg`, which already carries `_known_hosts`. This
-fallback is cheap, so the risk is low either way — but it must be settled before the layout
-is committed to, because moving state later means migrating existing installations.
-
-## 8. Per-Dockerfile ignore file — **VERIFY**
+## 8. Per-Dockerfile ignore file — **CONFIRMED**
 
 **Decision**: use `.docker/Dockerfile.web.dockerignore` to exclude the AWS and Windows task
 files, roles and playbooks from the web build context.
 
-**Why it needs verifying**: this is a BuildKit feature, and its availability depends on the
-builder version and on whether the compose build path honours it. It is unverified in this
-environment. Tracked as beads issue `ansible-all-my-things-bgvv.5`.
+**Why it needed verifying**: this is a BuildKit feature, and its availability depends on the
+builder version and on whether the compose build path honours it. Tracked as beads issue
+`ansible-all-my-things-bgvv.5`.
 
-**Fallback if unsupported**: extend the shared root `.dockerignore`. That is less precise,
-because the same file governs the runner image build, so any exclusion must be safe for
-both. The benefit is context size and honesty about scope rather than correctness, so the
-fallback costs little.
+**Verification result**: built a throwaway `Dockerfile.test` with a sibling
+`Dockerfile.test.dockerignore` excluding one probe file, via both plain `docker build -f` and
+`docker compose build` (Docker 29.5.3, buildx v0.34.1). In both paths the excluded file was
+absent from the build context while an unexcluded file and the Dockerfile itself were present.
+Confirms the per-Dockerfile ignore-file convention (`<Dockerfile-name>.dockerignore` beside the
+Dockerfile) is honoured by this environment's builder and by the compose build path.
 
 ## 9. Streaming run output
 
