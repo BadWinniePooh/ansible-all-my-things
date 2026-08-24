@@ -129,7 +129,7 @@ webui/
 
 .docker/
 ├── Dockerfile.web                  # Self-contained web image
-├── Dockerfile.web.dockerignore     # Per-Dockerfile context filter (pending verification)
+├── Dockerfile.web.dockerignore     # Per-Dockerfile context filter (verified)
 └── tests-web.yaml                  # Container structure tests for the web image
 
 tests/webui/                        # pytest suite

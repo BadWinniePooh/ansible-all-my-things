@@ -2,9 +2,10 @@
 
 **Feature**: `017-hcloud-web-frontend` | **Date**: 2026-08-24
 
-Resolves the open technical questions from [plan.md](./plan.md). Two items are marked
-**VERIFY** — they are mechanisms the design leans on that must be confirmed empirically
-before implementation depends on them. Each has a recorded fallback.
+Resolves the open technical questions from [plan.md](./plan.md). Two items, sections 7 and
+8, were mechanisms the design leaned on that needed confirming empirically before
+implementation could depend on them. Both are now **CONFIRMED** — see the verification
+results in each section.
 
 ## 1. Base image and Python version
 

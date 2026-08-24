@@ -53,15 +53,15 @@ change later.
 - [ ] T004 [P] Create the `tests/webui/` directory and pytest configuration, adding
       `pytest` to a development-only dependency declaration (never to
       `requirements-web.txt`, which ships in the image)
-- [ ] T005 Verify that Ansible skips hidden directories when scanning an inventory
-      directory, per [research.md](./research.md) section 7: create
-      `inventories/.webui/probe.yml` containing deliberately invalid inventory syntax, run
-      any playbook, confirm no parse error, then delete the probe. If it fails, add the
-      directory to `inventory_ignore_patterns` in `ansible.cfg` and record the change in
-      `research.md`
+- [x] T005 Verify that Ansible skips hidden directories when scanning an inventory
+      directory, per [research.md](./research.md) section 7 (**CONFIRMED**): a probe file
+      `inventories/.webui/probe.yml` with deliberately invalid inventory syntax was created,
+      `ansible-inventory --graph` (ansible-core 2.17.14) ran clean with no parse error, and
+      the probe was deleted. `.webui/` is settled as the storage layout; no
+      `inventory_ignore_patterns` change was needed.
 
-**⚠️ T005 gates the storage layout.** Every later task writes into `.webui/`. Settling this
-after implementation means migrating existing installations.
+**⚠️ T005 gated the storage layout and is now settled.** Every later task writes into
+`.webui/`.
 
 **Checkpoint**: skeleton exists and the state directory location is confirmed.
 
@@ -110,7 +110,10 @@ after implementation means migrating existing installations.
 - [ ] T017 Implement the dashboard shell and session routes in `webui/app.py` and
       `webui/templates/`: `GET /`, `POST /session/unlock`, `POST /session/lock`,
       `GET /session/status`, with the per-secret locked or unlocked indicators and controls
-      that are visibly disabled with a reason when a required secret is absent (FR-014)
+      that are visibly disabled with a reason when a required secret is absent (FR-014); the
+      dashboard's machine-list table, sourced from `webui/inventory.py` (T011), rendering
+      each machine's name, size, location, profile and address (FR-034) — later phases wire
+      the Configure and Destroy actions into these same rows (T041, T044)
 
 **Checkpoint**: the application runs, serves a dashboard, and holds secrets correctly. User
 story work can begin.
@@ -132,11 +135,12 @@ repository, fetch `compose.yaml`, start it, and confirm the interface loads.
       `ca-certificates`; bakes the pristine defaults copy to `/ansible/.inventories-pristine`;
       stamps `/ansible/VERSION` from `ARG IMAGE_VERSION` declared after the repository copy;
       normalizes CRLF on `*.sh` before `chmod`; no pip, gcc or git in the final stage
-- [ ] T019 [US1] Create `.docker/Dockerfile.web.dockerignore` excluding the AWS and Windows
-      task files, roles and playbooks, then verify BuildKit honours it per
-      [research.md](./research.md) section 8. If unsupported, extend the root
-      `.dockerignore` with exclusions that are also safe for the runner image build, and
-      record which path was taken
+- [x] T019 [US1] Create `.docker/Dockerfile.web.dockerignore` excluding the AWS and Windows
+      task files, roles and playbooks. BuildKit support is **CONFIRMED** per
+      [research.md](./research.md) section 8: a throwaway `Dockerfile.test` +
+      `Dockerfile.test.dockerignore` pair was excluded correctly by both `docker build -f`
+      and `docker compose build` (Docker 29.5.3, buildx v0.34.1). No root-`.dockerignore`
+      fallback is needed.
 - [ ] T020 [US1] Create `.docker/tests-web.yaml`: assert the pinned `ansible-playbook`
       major and minor version and that `python3` runs; assert each kept collection is
       present and each dropped collection is absent (SC-007); assert `VERSION`,
@@ -213,11 +217,13 @@ appears in the Hetzner console and the configuration survives a restart.
 **Independent test**: with setup complete, provision one machine and confirm it exists in
 the Hetzner console and appears in the machine list.
 
-- [ ] T034 [US3] Implement the create-form choice sources in `webui/config.py`: the two
-      profiles; the server sizes with the vCPU, memory, disk and monthly cost detail carried
-      in `inventories/group_vars/hcloud_linux/vars.yml`; the six locations with the
-      city names carried in `inventories/group_vars/hcloud/vars.yml`; and the Ubuntu
-      long-term-support image list plus a free-text field
+- [ ] T034 [US3] Implement the create-form choice sources in `webui/config.py`, matching
+      FR-028: the two profiles, each with a one-line software summary; the server sizes with
+      the vCPU, memory, disk and monthly cost detail carried in
+      `inventories/group_vars/hcloud_linux/vars.yml`; the six locations with the city names
+      carried in `inventories/group_vars/hcloud/vars.yml`; and the Ubuntu long-term-support
+      image list, each entry with its version and LTS support-end date, plus a free-text
+      field
 - [ ] T035 [US3] Implement the argument builder in `webui/runner.py` for the provision
       action, exactly as specified in
       [contracts/playbook-invocation.md](./contracts/playbook-invocation.md): the four
@@ -330,10 +336,13 @@ added name is claimed.
 **Independent test**: save a preset, restart, load it and confirm the form is filled.
 
 - [ ] T056 [US8] Implement `webui/presets.py`: read and write `.webui/presets.json` with
-      unique names, holding only the four non-secret choices
+      unique names, holding only the four non-secret choices; a rename operation that
+      refuses when the target name is already taken (FR-030)
 - [ ] T057 [US8] Implement the preset routes and templates: `GET /presets`, `POST /presets`,
-      `POST /presets/{name}/delete`, requiring confirmation when saving over an existing name
-- [ ] T058 [US8] Wire preset save and load into the create form, leaving every field
+      `POST /presets/{name}/delete`, `POST /presets/{name}/rename`, requiring confirmation
+      when saving over an existing name and rejecting a rename onto an existing name with an
+      explanation (FR-030)
+- [ ] T058 [US8] Wire preset save, load and rename into the create form, leaving every field
       editable after a preset is loaded
 
 ---
@@ -367,6 +376,8 @@ added name is claimed.
 - [ ] T066 Invoke the `review-documentation-here` skill across all new and modified
       documentation
 - [ ] T067 Invoke the `format-markdown` skill once, after all Markdown is finalized
+- [ ] T068 Verify SC-011: start a run and time the first `GET /run/stream` output event from
+      run start; confirm it arrives within 5 seconds
 
 ---
 
@@ -446,4 +457,4 @@ change.
 | Phase 8 (T046–T050) | `bgvv.7` (job runner) |
 | Phase 9 (T051–T055) | `bgvv.11` (hostname pool) |
 | Phase 10 (T056–T058) | `bgvv.12` (presets, shared with the create screen) |
-| Phase 11 (T059–T067) | `bgvv.2` (ADR), `bgvv.18` (documentation), `bgvv.15` (pytest suite, spanning T008/T010/T014/T027/T036/T053) |
+| Phase 11 (T059–T068) | `bgvv.2` (ADR), `bgvv.18` (documentation), `bgvv.15` (pytest suite, spanning T008/T010/T014/T027/T036/T053), `bgvv.7` (job runner, T068 SC-011 latency check) |

@@ -105,8 +105,9 @@ the Hetzner console and appears in the tool's machine list.
 
 1. **Given** completed setup, **When** the user opens the create form, **Then** they can
    choose a software profile, a server size, a location and an operating system image, each
-   presented with enough detail to choose sensibly, including the cost implication of the
-   server size.
+   presented with the detail FR-028 requires: a one-line summary per profile, cost per
+   server size, the meaning of each location, and the Ubuntu version plus LTS support-end
+   date per image option.
 2. **Given** choices made, **When** the user starts provisioning, **Then** the tool shows
    exactly what it is about to run before it runs it.
 3. **Given** a provisioning run, **When** it completes successfully, **Then** the new
@@ -241,6 +242,10 @@ is filled with the saved values.
 2. **Given** a saved preset, **When** the user loads it, **Then** the create form is filled
    with its values, which remain editable before the run starts.
 3. **Given** saved presets, **When** the tool is restarted, **Then** they are still present.
+4. **Given** a saved preset, **When** the user renames it to a name not already in use,
+   **Then** the preset is available under the new name and no longer under the old one.
+5. **Given** a saved preset, **When** the user renames it to a name already in use, **Then**
+   the tool refuses and explains that the name is taken.
 
 ---
 
@@ -350,8 +355,10 @@ is filled with the saved values.
 
 - **FR-027**: Users MUST be able to provision a Hetzner machine by choosing a software
   profile, a server size, a location and an operating system image.
-- **FR-028**: Each choice MUST be presented with the information needed to make it,
-  including the cost implication of the server size and the meaning of each location.
+- **FR-028**: Each choice MUST be presented with the information needed to make it: a
+  one-line software summary for each profile, the cost implication of each server size, the
+  meaning of each location, and the Ubuntu version plus LTS support-end date for each
+  operating system image option.
 - **FR-029**: Choices MUST apply to a single run only. The repository's own default
   configuration files MUST NOT be modified by any user action.
 - **FR-030**: Users MUST be able to save a set of choices under a name, reuse it, rename it
