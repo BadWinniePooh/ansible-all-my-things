@@ -22,8 +22,21 @@
 
   pre_tasks:
     # Guards the vault contract before any account is created. Also catches
-    # vault files predating the vault_desktop_users list, which defined one
-    # vault_<name> mapping per user instead.
+    # vault files predating vault_my_ansible_user_name, which hardcoded the
+    # account name in vars.yml instead.
+    - name: Assert the ansible user name is defined in the vault
+      ansible.builtin.assert:
+        that:
+          - vault_my_ansible_user_name is defined
+          - vault_my_ansible_user_name | length > 0
+        fail_msg: >-
+          vault_my_ansible_user_name is missing or empty in
+          inventories/group_vars/all/vault.yml. Define the name of the
+          ansible user account there. See
+          inventories/group_vars/all/vault-template.yml.
+
+    # Also catches vault files predating the vault_desktop_users list, which
+    # defined one vault_<name> mapping per user instead.
     - name: Assert desktop users are defined in the vault
       ansible.builtin.assert:
         that:

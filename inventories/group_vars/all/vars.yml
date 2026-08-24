@@ -11,7 +11,7 @@
 
 # The way users are set up in setup-users.yml requires to have a temporary
 # my_ansible_user instead of just setting the ansible_user variable here.
-my_ansible_user: "gandalf"
+my_ansible_user: "{{ vault_my_ansible_user_name }}"
 
 # These are base values that can be overridden by platform and provider-specific vars
 my_ansible_user_password: "{{ vault_my_ansible_user_password }}"

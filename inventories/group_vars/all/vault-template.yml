@@ -3,6 +3,7 @@
 
 # "my_ansible_user" defined in vars.yml
 # Enter the password for that user here
+vault_my_ansible_user_name: "PROVIDE_USER_NAME_HERE"
 vault_my_ansible_user_password: "PROVIDE_PASSWORD_HERE"
 
 # This is the name registered for the key in hcloud and aws
