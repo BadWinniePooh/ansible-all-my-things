@@ -1,0 +1,131 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1b1f23;
+  --bg: #ffffff;
+  --muted: #6a737d;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --danger: #cf222e;
+  --ok: #1a7f37;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand {
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+}
+
+.topbar nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.topbar nav a:hover {
+  color: var(--accent);
+}
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+section {
+  margin-bottom: 2rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+form label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+input, select, button {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+}
+
+.status-badge.locked {
+  background: #ffebe9;
+  color: var(--danger);
+}
+
+.status-badge.unlocked {
+  background: #dafbe1;
+  color: var(--ok);
+}
+
+.banner {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.banner-error {
+  background: #ffebe9;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.banner-notice {
+  background: #ddf4ff;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+pre.run-output {
+  background: #0d1117;
+  color: #c9d1d9;
+  padding: 1rem;
+  border-radius: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,0 +1,24 @@
+# Runs the published web frontend image (webui/) with no build step.
+# See specs/017-hcloud-web-frontend/quickstart.md.
+#
+#   docker compose up -d
+#   open http://127.0.0.1:8080
+#
+# For a local build instead, use compose.build.yaml.
+
+services:
+  web:
+    # Replace the owner with your fork's, lowercased, if you publish your
+    # own image (docs/architecture/concepts/web-frontend/usage.md).
+    image: ghcr.io/wonderbird/ansible-web:latest
+    restart: unless-stopped
+    # FR-009/FR-049: local machine only by default. This controls a cloud
+    # account and has no login of its own — do not change 127.0.0.1 to
+    # 0.0.0.0 on a machine reachable by others.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - inventories:/ansible/inventories
+
+volumes:
+  inventories:

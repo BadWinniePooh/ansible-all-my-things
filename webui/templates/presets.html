@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Presets — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>Presets</h1>
+
+{% if presets %}
+<table>
+  <thead>
+    <tr><th>Name</th><th>Profile</th><th>Server size</th><th>Location</th><th>Image</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+    {% for preset in presets %}
+    <tr>
+      <td>{{ preset.name }}</td>
+      <td>{{ preset.profile }}</td>
+      <td>{{ preset.server_type }}</td>
+      <td>{{ preset.location }}</td>
+      <td>{{ preset.image }}</td>
+      <td>
+        <a href="/create?preset={{ preset.name }}">Load</a>
+        <form method="post" action="/presets/{{ preset.name }}/rename" style="display:inline">
+          <input type="text" name="new_name" placeholder="new name" required>
+          <button type="submit">Rename</button>
+        </form>
+        <form method="post" action="/presets/{{ preset.name }}/delete" style="display:inline">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No presets saved yet. Save one from the <a href="/create">create form</a>.</p>
+{% endif %}
+
+{% endblock %}

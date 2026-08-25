@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Hetzner web frontend{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Hetzner web frontend</a>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/create">Create VM</a>
+      <a href="/vault">Vault</a>
+      <a href="/sshkey">SSH key</a>
+      <a href="/pool">Name pool</a>
+      <a href="/presets">Presets</a>
+    </nav>
+    <div id="session-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
+      {% include "fragments/session_status.html" %}
+    </div>
+  </header>
+
+  <main>
+    {% if error %}
+    <p class="banner banner-error">{{ error }}</p>
+    {% endif %}
+    {% if notice %}
+    <p class="banner banner-notice">{{ notice }}</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

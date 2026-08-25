@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Vault — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>Configuration</h1>
+<p>
+  Generated from the project's own configuration template, so it always matches what the
+  automation expects. Stored encrypted at rest, readable only with your vault password.
+</p>
+
+{% if not vault_unlocked %}
+<p>Unlock the vault password on the <a href="/">dashboard</a> to view or edit this.</p>
+{% else %}
+<form method="post" action="/vault">
+  <label>
+    Ansible user name
+    <input type="text" name="vault_my_ansible_user_name" value="{{ values.vault_my_ansible_user_name or '' }}">
+  </label>
+
+  <label>
+    Ansible user password
+    <input id="pw-user" type="password" name="vault_my_ansible_user_password"
+           value="{{ values.vault_my_ansible_user_password or '' }}">
+    <button type="button" onclick="toggleReveal('pw-user')">Show</button>
+  </label>
+
+  <label>
+    GNOME keyring password
+    <input id="pw-keyring" type="password" name="vault_gnome_keyring_password"
+           value="{{ values.vault_gnome_keyring_password or '' }}">
+    <button type="button" onclick="toggleReveal('pw-keyring')">Show</button>
+  </label>
+
+  <label>
+    Windows administrator password <em>(not used — this interface is Hetzner Cloud/Linux only)</em>
+    <input id="pw-windows" type="password" name="vault_windows_admin_password"
+           value="{{ values.vault_windows_admin_password or '' }}">
+    <button type="button" onclick="toggleReveal('pw-windows')">Show</button>
+  </label>
+
+  <fieldset>
+    <legend>SSH key (managed — see <a href="/sshkey">SSH key</a>)</legend>
+    <label>Key name <input type="text" value="{{ values.vault_my_ssh_key_name or '(not generated yet)' }}" readonly></label>
+    <label>Public key <input type="text" value="{{ values.vault_my_ssh_public_key or '(not generated yet)' }}" readonly></label>
+  </fieldset>
+
+  {% include "fragments/desktop_users.html" %}
+
+  <button type="submit">Save</button>
+</form>
+
+<script>
+function toggleReveal(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endif %}
+
+{% endblock %}

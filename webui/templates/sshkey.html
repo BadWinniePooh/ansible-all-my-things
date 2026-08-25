@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}SSH key — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>SSH key</h1>
+
+{% if public_key %}
+<p>A keypair is generated and its public half is registered with Hetzner.</p>
+<dl>
+  <dt>Registered name</dt><dd>{{ registered_name }}</dd>
+  <dt>Fingerprint</dt><dd><code>{{ fingerprint or "unknown" }}</code></dd>
+  <dt>Public key</dt><dd><code>{{ public_key }}</code></dd>
+</dl>
+<p>The private key never leaves the container and is never shown.</p>
+{% else %}
+<p>No keypair has been generated yet.</p>
+{% endif %}
+
+{% if not (token_unlocked and vault_unlocked) %}
+<p>Generating or rotating requires both the Hetzner API token and the vault password to be
+   unlocked on the <a href="/">dashboard</a>.</p>
+{% else %}
+
+<form method="post" action="/sshkey/generate">
+  <button type="submit">{{ 'Generate' if not public_key else 'Re-generate' }}</button>
+</form>
+
+{% if public_key %}
+<form method="post" action="/sshkey/rotate">
+  <p class="banner banner-error">
+    <strong>Before rotating:</strong> machines already provisioned trust the current key.
+    Rotating makes them unreachable to the automation. Rotate only when no machines are
+    live, or re-key existing hosts afterwards.
+  </p>
+  <label><input type="checkbox" name="confirm_rotation" value="yes" required> I understand and want to rotate the key</label>
+  <button type="submit">Rotate key</button>
+</form>
+{% endif %}
+
+{% if remote_conflict %}
+<form method="post" action="{{ pending_action }}">
+  <p class="banner banner-error">
+    A key named <strong>{{ remote_conflict.name }}</strong> already exists in your Hetzner
+    account. Replacing it will remove that key and register a new one under the same name.
+  </p>
+  {% if pending_action == '/sshkey/rotate' %}
+  <input type="hidden" name="confirm_rotation" value="yes">
+  {% endif %}
+  <input type="hidden" name="confirm_replace" value="yes">
+  <button type="submit">Replace it</button>
+</form>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Hetzner web frontend{% endblock %}
+{% block content %}
+
+{% if defaults_refresh_available %}
+<div class="banner banner-notice">
+  A newer image is running than the one this installation was seeded with.
+  <form method="post" action="/defaults/refresh" style="display:inline">
+    <button type="submit">Refresh defaults</button>
+  </form>
+  Your configuration, machine records, name pool and presets are never touched by this.
+</div>
+{% endif %}
+
+<section>
+  <h1>Unlock this session</h1>
+  <p>
+    Neither value is stored. Both are held in memory for as long as the container runs,
+    and are discarded on restart or after 30 minutes of inactivity.
+  </p>
+  <form method="post" action="/session/unlock">
+    <label>
+      Hetzner API token
+      <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
+    </label>
+    <label>
+      Vault password
+      <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
+    </label>
+    <button type="submit">Unlock</button>
+  </form>
+</section>
+
+<section>
+  <h1>Machines</h1>
+  {% if machines %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Address</th>
+        <th>Profile</th>
+        <th>Server size</th>
+        <th>Location</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for machine in machines %}
+      <tr>
+        <td>{{ machine.name }}</td>
+        <td>{{ machine.address or "unknown" }}</td>
+        <td>{{ machine.profile or "unknown" }}</td>
+        <td>{{ machine.server_type or "unknown" }}</td>
+        <td>{{ machine.location or "unknown" }}</td>
+        <td>
+          <form method="post" action="/machines/{{ machine.name }}/configure">
+            <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Configure</button>
+          </form>
+          <form method="post" action="/machines/{{ machine.name }}/destroy">
+            <input type="text" name="confirm_name" placeholder="type '{{ machine.name }}' to confirm" required>
+            <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Destroy</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No machines yet. <a href="/create">Provision one.</a></p>
+  {% endif %}
+</section>
+
+<section>
+  <h1>Name pool</h1>
+  <p>{{ pool_free | length }} free, {{ pool_used | length }} used. <a href="/pool">Manage the pool.</a></p>
+</section>
+
+{% endblock %}

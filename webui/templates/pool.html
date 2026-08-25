@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Name pool — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>Machine name pool</h1>
+<p>{{ free | length }} free, {{ used | length }} used, {{ entries | length }} total.</p>
+<p>
+  One name per line. Order determines which name a new machine receives — the first free
+  name in order. A name currently used by a live machine cannot be removed or renamed.
+</p>
+
+<form method="post" action="/pool">
+  <textarea name="entries" rows="15" cols="40">{% for entry in entries %}{{ entry }}
+{% endfor %}</textarea>
+  <button type="submit">Save</button>
+</form>
+
+{% endblock %}

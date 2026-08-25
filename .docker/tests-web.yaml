@@ -1,0 +1,110 @@
+schemaVersion: 2.0.0
+
+commandTests:
+  - name: "Check ansible-playbook pinned version"
+    command: "ansible-playbook"
+    args: [ "--version" ]
+    expectedOutput: [ "ansible-playbook \\[core 2\\.21\\..*" ]
+
+  - name: "Check python3 runs"
+    command: "python3"
+    args: [ "--version" ]
+    expectedOutput: [ "Python 3.*" ]
+
+  - name: "Check hetzner.hcloud collection is present"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "hetzner.hcloud" ]
+    expectedOutput: [ ".*hetzner.hcloud.*" ]
+
+  - name: "Check community.general collection is present"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "community.general" ]
+    expectedOutput: [ ".*community.general.*" ]
+
+  - name: "Check ansible.posix collection is present"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "ansible.posix" ]
+    expectedOutput: [ ".*ansible.posix.*" ]
+
+  # SC-007: no component serving only an out-of-scope provider or platform.
+  - name: "Check amazon.aws collection is absent"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "amazon.aws" ]
+    excludedOutput: [ ".*amazon.aws.*" ]
+
+  - name: "Check ansible.windows collection is absent"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "ansible.windows" ]
+    excludedOutput: [ ".*ansible.windows.*" ]
+
+  - name: "Check community.windows collection is absent"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "community.windows" ]
+    excludedOutput: [ ".*community.windows.*" ]
+
+  - name: "Check chocolatey.chocolatey collection is absent"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "chocolatey.chocolatey" ]
+    excludedOutput: [ ".*chocolatey.chocolatey.*" ]
+
+  - name: "Check containers.podman collection is absent"
+    command: "ansible-galaxy"
+    args: [ "collection", "list", "containers.podman" ]
+    excludedOutput: [ ".*containers.podman.*" ]
+
+fileExistenceTests:
+  - name: "Entrypoint present and executable"
+    path: "/ansible/webui/entrypoint.sh"
+    shouldExist: true
+    permissions: "-rwxr-xr-x"
+
+  - name: "VERSION stamped at build time"
+    path: "/ansible/VERSION"
+    shouldExist: true
+
+  - name: "ansible.cfg baked in"
+    path: "/ansible/ansible.cfg"
+    shouldExist: true
+
+  - name: "Pristine defaults snapshot baked in"
+    path: "/ansible/.inventories-pristine/group_vars/all/vault-template.yml"
+    shouldExist: true
+
+  - name: "Vault secrets NOT baked into the image (SC-006)"
+    path: "/ansible/inventories/group_vars/all/vault.yml"
+    shouldExist: false
+
+  - name: "pip absent from the venv (SC-007)"
+    path: "/opt/venv/bin/pip"
+    shouldExist: false
+
+  - name: "pip absent from the base interpreter (SC-007)"
+    path: "/usr/local/bin/pip3"
+    shouldExist: false
+
+  - name: "git absent from runtime stage (SC-007)"
+    path: "/usr/bin/git"
+    shouldExist: false
+
+  - name: "AWS create task absent from runtime stage (SC-007)"
+    path: "/ansible/playbooks/tasks/create/aws.yml"
+    shouldExist: false
+
+  # NOT SC-007-absent: playbooks/configure-profile.yml has an unconditional
+  # import_playbook of ../setup-roles-windows.yml, which is resolved
+  # statically at parse time regardless of whether any windows host is in
+  # the inventory. Dropping this role breaks every configure run. Only the
+  # Windows-only collections (ansible.windows, community.windows,
+  # chocolatey.chocolatey, asserted absent above) are actually excludable,
+  # since those are needed only if the play's tasks run.
+  - name: "Windows foundation role present (required for configure-profile.yml to parse)"
+    path: "/ansible/roles/windows_foundation"
+    shouldExist: true
+
+  - name: "setup-roles-windows.yml present (required for configure-profile.yml to parse)"
+    path: "/ansible/setup-roles-windows.yml"
+    shouldExist: true
+
+  - name: "gcc absent from runtime stage (SC-007)"
+    path: "/usr/bin/gcc"
+    shouldExist: false

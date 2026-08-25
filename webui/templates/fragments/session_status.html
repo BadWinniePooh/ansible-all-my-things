@@ -1,0 +1,11 @@
+<span class="status-badge {{ 'unlocked' if token_unlocked else 'locked' }}">
+  API token: {{ 'unlocked' if token_unlocked else 'locked' }}
+</span>
+<span class="status-badge {{ 'unlocked' if vault_unlocked else 'locked' }}">
+  Vault password: {{ 'unlocked' if vault_unlocked else 'locked' }}
+</span>
+{% if token_unlocked or vault_unlocked %}
+<form method="post" action="/session/lock" style="display:inline">
+  <button type="submit">Lock</button>
+</form>
+{% endif %}

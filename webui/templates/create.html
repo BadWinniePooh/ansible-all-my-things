@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Create VM — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>Create a machine</h1>
+
+{% if not (token_unlocked and vault_unlocked) %}
+<p>Provisioning requires both the Hetzner API token and the vault password to be unlocked
+   on the <a href="/">dashboard</a>.</p>
+{% endif %}
+
+{% if presets %}
+<p>
+  Load a saved preset:
+  {% for preset in presets %}
+  <a href="/create?preset={{ preset.name }}">{{ preset.name }}</a>{{ ", " if not loop.last }}
+  {% endfor %}
+  (see <a href="/presets">all presets</a>)
+</p>
+{% endif %}
+
+<form id="create-form" method="post" action="/create">
+  <fieldset>
+    <legend>Profile</legend>
+    {% for value, summary in profiles.items() %}
+    <label>
+      <input type="radio" name="profile" value="{{ value }}" {{ 'checked' if value == selected.profile }}>
+      <strong>{{ value }}</strong> — {{ summary }}
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Server size</legend>
+    {% for value, spec in server_types.items() %}
+    <label>
+      <input type="radio" name="server_type" value="{{ value }}" {{ 'checked' if value == selected.server_type }}>
+      <strong>{{ value }}</strong> — {{ spec.vcpu }} vCPU, {{ spec.memory_gb }} GB RAM,
+      {{ spec.disk_gb }} GB disk, ~{{ spec.monthly_eur }} €/month
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Location</legend>
+    {% for value, city in locations.items() %}
+    <label>
+      <input type="radio" name="location" value="{{ value }}" {{ 'checked' if value == selected.location }}>
+      <strong>{{ value }}</strong> — {{ city }}
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Operating system image</legend>
+    {% for image in images %}
+    <label>
+      <input type="radio" name="image_select" value="{{ image.value }}" {{ 'checked' if image.value == selected.image }}>
+      {{ image.label }} (support ends {{ image.support_end }})
+    </label>
+    {% endfor %}
+    <label>
+      Other (free text)
+      <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12">
+    </label>
+  </fieldset>
+
+  <button type="button" hx-post="/create/preview" hx-include="closest form" hx-target="#command-preview-wrap" hx-swap="innerHTML">
+    Preview command
+  </button>
+  <div id="command-preview-wrap"></div>
+
+  <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Start provisioning</button>
+</form>
+
+<form method="post" action="/presets" style="margin-top:1rem">
+  <label>
+    Save these choices as a preset
+    <input type="text" name="name" placeholder="preset name" required>
+  </label>
+  <button type="button" hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML">
+    Save preset
+  </button>
+  <div id="preset-save-result"></div>
+</form>
+
+{% endblock %}

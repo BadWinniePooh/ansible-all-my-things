@@ -1,0 +1,27 @@
+# Ansible Collections for the self-contained Hetzner web frontend image.
+# Reduced from requirements.yml: hcloud only, no AWS, no containers.podman
+# — see specs/017-hcloud-web-frontend/research.md section 2.
+#
+# ansible.windows and chocolatey.chocolatey are NOT dropped despite serving
+# only the out-of-scope Windows profile. playbooks/configure-profile.yml
+# has an unconditional import_playbook of ../setup-roles-windows.yml, and a
+# play's `roles:` list is resolved -- including short module-name lookup
+# (win_shell, win_reboot, win_chocolatey; this repo declares no
+# `collections:` keyword anywhere, so these resolve via installed
+# collections, not FQCN) -- at parse time for every ansible-playbook
+# invocation, regardless of whether any windows host is in the inventory.
+# Dropping either collection makes every configure run fail with
+# "couldn't resolve module/action 'win_shell'" before any host is even
+# contacted. Confirmed by running configure-profile.yml (not just
+# --syntax-check) against a real (non-windows) --limit target.
+collections:
+  - name: hetzner.hcloud
+    version: ">=1.0.0"
+  - name: community.general
+    version: ">=1.0.0"
+  - name: ansible.posix
+    version: ">=2.2.0"
+  - name: ansible.windows
+    version: ">=1.0.0"
+  - name: chocolatey.chocolatey
+    version: ">=1.0.0"

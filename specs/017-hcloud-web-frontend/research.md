@@ -33,14 +33,16 @@ version rather than changing the base family.
 
 ## 2. Reduced Ansible collection set
 
-**Decision**: `requirements-web.yml` keeps `hetzner.hcloud`, `community.general` and
-`ansible.posix`. It drops `amazon.aws`, `ansible.windows`, `community.windows`,
-`chocolatey.chocolatey` and `containers.podman`.
+**Decision** (as revised during implementation — see Correction below):
+`requirements-web.yml` keeps `hetzner.hcloud`, `community.general`, `ansible.posix`,
+`ansible.windows` and `chocolatey.chocolatey`. It drops `amazon.aws`, `community.windows`
+and `containers.podman`.
 
-**Rationale**: the repository declares no `collections:` keyword in any role `meta/main.yml`
-or playbook. Short module names therefore resolve against `ansible.builtin` only, which
-makes a fully-qualified-name search an authoritative usage list rather than a heuristic.
-That search returns:
+**Original rationale** (superseded in part, kept for the audit trail): the repository
+declares no `collections:` keyword in any role `meta/main.yml` or playbook. The plan assumed
+short module names therefore resolve against `ansible.builtin` only, making a
+fully-qualified-name search an authoritative usage list rather than a heuristic. That search
+returned:
 
 | Collection | References found |
 |---|---|
@@ -51,18 +53,47 @@ That search returns:
 | `ansible.windows`, `community.windows`, `chocolatey.chocolatey` | `roles/win_ai_agent`, `roles/windows_foundation` |
 | `containers.podman` | none anywhere in the repository |
 
-Every dropped collection is referenced only by the AWS provider or the Windows profile,
-both out of scope, or by nothing at all.
+On that basis every collection referenced only by the AWS provider or the Windows profile
+was dropped as out of scope.
+
+**Correction, found only against a real deployed container (post-implementation)**: the
+"resolves against `ansible.builtin` only" assumption was wrong for the Windows roles.
+`playbooks/configure-profile.yml` has an **unconditional** (no `when:`)
+`import_playbook: ../setup-roles-windows.yml`, and a play's `roles:` list — including short
+module-name lookup for `win_shell`, `win_reboot` (`ansible.windows`) and `win_chocolatey`
+(`chocolatey.chocolatey`) — is resolved **at parse time**, for every `ansible-playbook`
+invocation, regardless of whether any `windows` host is in the inventory. With those two
+collections absent, every configure run — `basic` or `desktop`, hcloud or otherwise — failed
+before contacting any host:
+
+```text
+[ERROR]: couldn't resolve module/action 'win_shell'. This often indicates a misspelling,
+missing collection, or incorrect module path.
+Origin: /ansible/roles/windows_foundation/tasks/main.yml:3:3
+```
+
+`ansible.windows` and `chocolatey.chocolatey` are therefore kept, and so are the
+`roles/windows_foundation/`, `roles/win_ai_agent/`, `roles/windows_common/` directories and
+`setup-roles-windows.yml` in `.docker/Dockerfile.web.dockerignore` (previously excluded).
+`community.windows` stays dropped: nothing in those roles resolves a short name against it.
+`amazon.aws` and `containers.podman` stay dropped for the same reason as before — neither is
+referenced by anything `configure-profile.yml` statically imports.
+
+The general lesson: for this repository's "no `collections:` keyword, short-name resolution"
+pattern, a reference-count search is an accurate list of what **executes**, but not of what
+must merely **exist on disk and resolve at parse time** for a shared, unconditionally
+imported playbook to run at all. The two are different questions, and only the second one
+determines what a reduced image can safely drop.
 
 `community.general` and `ansible.posix` are kept even though their current references sit
 outside this feature's execution paths. Both are small, and dropping a general-purpose
 collection to save little would make the next role that needs it fail in a confusing way.
 
-**Risk to close during implementation**: `containers.podman` has no references at all, yet
-the `podman` role runs in the `basic` profile that this feature applies. That role
-evidently uses builtin modules, but the basic and desktop configure paths must both be
-exercised end to end before the drop is considered proven. This is the single most likely
-source of a late surprise.
+**Risk closed during implementation**: `containers.podman` has no references at all, and the
+`podman` role's tasks, Molecule scenario and `meta/main.yml` were confirmed to reference only
+`ansible.builtin` modules with no collection dependency declared — the drop cannot break that
+role's task execution. Not exercised against a real Hetzner machine (tracked in
+`ansible-all-my-things-5joe`).
 
 ## 3. Reduced Python dependency set
 

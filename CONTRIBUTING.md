@@ -57,3 +57,4 @@ Development concepts are documented in
 - [Testing concepts](./docs/architecture/concepts/testing.md)
 - [Toolchain docker image](./docs/architecture/concepts/toolchain-docker-image.md)
 - [Runner docker image](./docs/architecture/concepts/runner-docker-image.md)
+- [Web frontend](./docs/architecture/concepts/web-frontend.md)

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Run — Hetzner web frontend{% endblock %}
+{% block content %}
+
+<h1>Run</h1>
+
+{% if not command %}
+<p>No run has started yet. <a href="/create">Provision a machine</a> to start one.</p>
+{% else %}
+<p><strong>Command:</strong></p>
+<pre class="run-output">{{ command | join(' ') }}</pre>
+
+<p id="run-outcome">
+  Outcome:
+  {% if outcome == 'running' %}running…{% else %}{{ outcome }}{% if exit_code is not none %} (exit {{ exit_code }}){% endif %}{% endif %}
+</p>
+
+<pre id="run-output" class="run-output">{% if outcome != 'running' %}{% for line in output %}{{ line }}
+{% endfor %}{% endif %}</pre>
+{# When running, the script below fills this in via SSE, which replays the
+   ring buffer before switching to live lines -- pre-rendering here too
+   would duplicate every already-buffered line. #}
+
+{% if outcome == 'running' %}
+<form method="post" action="/run/cancel">
+  <button type="submit">Cancel run</button>
+</form>
+<script>
+(function () {
+  var outputEl = document.getElementById('run-output');
+  var outcomeEl = document.getElementById('run-outcome');
+  var source = new EventSource('/run/stream');
+  source.onmessage = function (event) {
+    outputEl.textContent += event.data + "\n";
+    outputEl.scrollTop = outputEl.scrollHeight;
+  };
+  source.addEventListener('terminal', function (event) {
+    var data = JSON.parse(event.data);
+    var text = 'Outcome: ' + data.outcome;
+    if (data.exit_code !== null && data.exit_code !== undefined) {
+      text += ' (exit ' + data.exit_code + ')';
+    }
+    outcomeEl.textContent = text;
+    source.close();
+  });
+})();
+</script>
+{% endif %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,25 @@
+# Builds the web frontend image (webui/) from this checkout in a single
+# step, and runs it. See specs/017-hcloud-web-frontend/quickstart.md.
+#
+#   docker compose -f compose.build.yaml up -d --build
+#   open http://127.0.0.1:8080
+#
+# Self-contained: this build does not depend on, or require building, the
+# separate ansible-runner image (.docker/Dockerfile).
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile.web
+    restart: unless-stopped
+    # FR-009/FR-049: local machine only by default. This controls a cloud
+    # account and has no login of its own — do not change 127.0.0.1 to
+    # 0.0.0.0 on a machine reachable by others.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - inventories:/ansible/inventories
+
+volumes:
+  inventories:

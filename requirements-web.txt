@@ -1,0 +1,25 @@
+# Python dependencies for the self-contained Hetzner web frontend image
+# (webui/). Reduced from requirements.txt: no AWS SDK, no Molecule stack —
+# see specs/017-hcloud-web-frontend/research.md section 3.
+
+# Pinned to match .docker/Dockerfile's ansible-core pin.
+ansible-core==2.21.1
+
+# Hetzner Cloud provider support (hetzner.hcloud collection dependency)
+hcloud>=1.16.0
+
+# Setting up users requires passlib for password hashing
+passlib
+
+# Used by webui/hcloud_api.py and webui/seed.py's update-check path
+requests>=2.25.0
+PyYAML>=5.4.0
+
+# Web application
+fastapi>=0.115.0
+uvicorn>=0.32.0
+jinja2>=3.1.0
+httpx>=0.27.0
+# Required by FastAPI/Starlette to parse the session-unlock form (multipart/
+# urlencoded request bodies)
+python-multipart>=0.0.12
