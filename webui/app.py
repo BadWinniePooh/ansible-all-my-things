@@ -100,7 +100,23 @@ def _machines_with_account_detail(session_id: str, status: dict) -> tuple[list, 
         servers = hcloud_api.list_servers(secret_store.hcloud_token(session_id))
     except hcloud_api.HetznerApiError as exc:
         return machines, f"Could not read machine details from Hetzner ({exc})."
-    return inventory.merge_account_detail(machines, servers), None
+
+    merged = inventory.merge_account_detail(machines, servers)
+    # A row that matched nothing keeps whatever the local records knew,
+    # which is usually nothing -- and "unknown" on its own does not say
+    # why. The two sides disagreeing about names is the reason worth
+    # naming, because it is the one the operator can act on.
+    unmatched = [machine.name for machine in merged if machine.status is None]
+    if unmatched and servers:
+        return merged, (
+            f"The Hetzner account has no server named {', '.join(unmatched)}. "
+            f"It holds {len(servers)}: {', '.join(sorted(_server_names(servers))) or 'none'}."
+        )
+    return merged, None
+
+
+def _server_names(servers: list[dict]) -> list[str]:
+    return [name for name in (server.get("name") for server in servers) if name]
 
 
 def _dashboard_context(request: Request, *, error: str | None = None, notice: str | None = None) -> dict:

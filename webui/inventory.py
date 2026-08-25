@@ -55,18 +55,57 @@ def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[M
         if server is None:
             merged.append(machine)
             continue
-        datacenter = server.get("datacenter") or {}
-        public_net = server.get("public_net") or {}
         merged.append(
             replace(
                 machine,
-                address=(public_net.get("ipv4") or {}).get("ip") or machine.address,
-                server_type=(server.get("server_type") or {}).get("name") or machine.server_type,
-                location=(datacenter.get("location") or {}).get("name") or machine.location,
+                address=_address_of(server) or machine.address,
+                server_type=_name_of(server.get("server_type")) or machine.server_type,
+                location=_location_of(server) or machine.location,
                 status=server.get("status"),
             )
         )
     return merged
+
+
+def _name_of(value: object) -> str | None:
+    """A field the account reports either as an object with a name or, in
+    some responses, as the name itself."""
+    if isinstance(value, dict):
+        name = value.get("name")
+        return name if isinstance(name, str) else None
+    return value if isinstance(value, str) else None
+
+
+def _location_of(server: dict) -> str | None:
+    """The location code, wherever this response happens to carry it.
+
+    Documented shape is datacenter.location.name ("nbg1"). A response that
+    reports the location at the top level is read the same way, and a
+    datacenter without a location block still answers with its own name
+    ("nbg1-dc3") -- which names the right place, and is a better answer
+    than "unknown".
+    """
+    datacenter = server.get("datacenter")
+    for candidate in (
+        server.get("location"),
+        (datacenter or {}).get("location") if isinstance(datacenter, dict) else None,
+    ):
+        name = _name_of(candidate)
+        if name:
+            return name
+    return _name_of(datacenter)
+
+
+def _address_of(server: dict) -> str | None:
+    public_net = server.get("public_net") or {}
+    ipv4 = public_net.get("ipv4")
+    if isinstance(ipv4, dict) and ipv4.get("ip"):
+        return ipv4["ip"]
+    # A machine reachable over IPv6 only still has an address worth showing.
+    ipv6 = public_net.get("ipv6")
+    if isinstance(ipv6, dict) and ipv6.get("ip"):
+        return ipv6["ip"]
+    return None
 
 
 def _load_details(details_file: Path) -> dict[str, dict[str, str]]:

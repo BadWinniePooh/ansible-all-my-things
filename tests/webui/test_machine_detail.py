@@ -137,3 +137,54 @@ def test_merging_leaves_a_machine_the_account_does_not_know_alone():
     merged = inventory.merge_account_detail([LOCAL_ONLY], [])
 
     assert merged == [LOCAL_ONLY]
+
+
+@pytest.mark.parametrize(
+    "server",
+    [
+        pytest.param(
+            {"datacenter": {"name": "nbg1-dc3", "location": {"name": "nbg1"}}},
+            id="documented: nested in the datacenter",
+        ),
+        pytest.param({"location": {"name": "nbg1"}}, id="reported at the top level"),
+        pytest.param({"location": "nbg1"}, id="reported as the name itself"),
+    ],
+)
+def test_the_location_is_read_wherever_the_response_carries_it(server):
+    merged = inventory.merge_account_detail([LOCAL_ONLY], [{"name": "edoras", **server}])
+
+    assert merged[0].location == "nbg1"
+
+
+def test_a_datacenter_without_a_location_block_still_names_the_place():
+    """Better than "unknown": it is the right place, just more precisely
+    than the location codes the create form offers."""
+    merged = inventory.merge_account_detail(
+        [LOCAL_ONLY], [{"name": "edoras", "datacenter": {"name": "nbg1-dc3"}}]
+    )
+
+    assert merged[0].location == "nbg1-dc3"
+
+
+def test_an_ipv6_only_machine_still_shows_an_address():
+    merged = inventory.merge_account_detail(
+        [LOCAL_ONLY], [{"name": "edoras", "public_net": {"ipv6": {"ip": "2a01:4f8::1"}}}]
+    )
+
+    assert merged[0].address == "2a01:4f8::1"
+
+
+def test_a_name_the_account_does_not_know_is_reported_with_what_it_does(
+    client, unlocked, monkeypatch
+):
+    """"unknown" in every column does not say why. A mismatch between the
+    machine records and the account is the reason an operator can act on,
+    so it is named along with the names the account does hold."""
+    monkeypatch.setattr(
+        hcloud_api, "list_servers", lambda token: [{**SERVERS[0], "name": "edoras-old"}]
+    )
+
+    body = client.get("/").text
+
+    assert "The Hetzner account has no server named edoras" in body
+    assert "edoras-old" in body
