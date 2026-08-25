@@ -30,6 +30,13 @@ role-template
 .markdownlint.json
 .shellcheckrc
 
+# roles/claude_code copies this .md as a data payload to desktop users'
+# ~/Documents/Cline/ (tasks/configure.yml "Copy OMC setup prompt"), not
+# documentation -- the blanket **/*.md exclusion above caught it too,
+# breaking every configure run against a desktop-profile host with
+# "Could not find or access 'setup-omc-prompt.md'".
+!roles/claude_code/files/setup-omc-prompt.md
+
 # Docker build files themselves. This Dockerfile is passed via -f and
 # read directly by the client; it does not need to also be baked in via
 # COPY. The runner image's own build files are unrelated to this image.

@@ -56,7 +56,7 @@
     {% for image in images %}
     <label>
       <input type="radio" name="image_select" value="{{ image.value }}" {{ 'checked' if image.value == selected.image }}>
-      {{ image.label }} (support ends {{ image.support_end }})
+      {{ image.label }}{{ " (support ends " ~ image.support_end ~ ")" if image.support_end }}
     </label>
     {% endfor %}
     <label>

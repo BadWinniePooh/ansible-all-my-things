@@ -32,20 +32,29 @@ commandTests:
     args: [ "collection", "list", "amazon.aws" ]
     excludedOutput: [ ".*amazon.aws.*" ]
 
-  - name: "Check ansible.windows collection is absent"
+  # ansible.windows and chocolatey.chocolatey ARE present (not SC-007-absent):
+  # playbooks/configure-profile.yml unconditionally import_playbooks
+  # ../setup-roles-windows.yml, whose windows_foundation/win_ai_agent roles
+  # use win_shell/win_reboot/win_chocolatey short module names. A play's
+  # `roles:` list -- including short module-name lookup -- is resolved at
+  # parse time regardless of inventory, so dropping either collection breaks
+  # every configure run with "couldn't resolve module/action 'win_shell'"
+  # before any host is contacted. Only community.windows stays droppable:
+  # no short name in those roles resolves to it.
+  - name: "Check ansible.windows collection is present"
     command: "ansible-galaxy"
     args: [ "collection", "list", "ansible.windows" ]
-    excludedOutput: [ ".*ansible.windows.*" ]
+    expectedOutput: [ ".*ansible.windows.*" ]
 
   - name: "Check community.windows collection is absent"
     command: "ansible-galaxy"
     args: [ "collection", "list", "community.windows" ]
     excludedOutput: [ ".*community.windows.*" ]
 
-  - name: "Check chocolatey.chocolatey collection is absent"
+  - name: "Check chocolatey.chocolatey collection is present"
     command: "ansible-galaxy"
     args: [ "collection", "list", "chocolatey.chocolatey" ]
-    excludedOutput: [ ".*chocolatey.chocolatey.*" ]
+    expectedOutput: [ ".*chocolatey.chocolatey.*" ]
 
   - name: "Check containers.podman collection is absent"
     command: "ansible-galaxy"

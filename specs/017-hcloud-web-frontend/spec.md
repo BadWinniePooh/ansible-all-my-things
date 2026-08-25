@@ -478,9 +478,12 @@ planning.
   discarded when the tool stops.
 - **Destruction requires typing the machine's name** to confirm, since it is irreversible
   and the list rows sit close together.
-- **Operating system image is offered as a short list of current Ubuntu long-term-support
-  images plus a free-text field**, rather than a live catalogue lookup, so the create form
-  works before a token is entered.
+- **Operating system image list comes from a live Hetzner API lookup (`GET /images`,
+  `type=system`) once the token is unlocked, plus a free-text field.** Revised
+  post-implementation, at user request, from the original "static Ubuntu LTS list, no
+  live lookup" design. Before the token is unlocked -- or if the live lookup fails --
+  the form falls back to a short built-in Ubuntu LTS list, so the create form still
+  works with no token entered.
 - **Dry-run mode is out of scope** for this version.
 - **A single instance serves a single user at a time.** The one-active-run rule is a
   correctness requirement, not a scaling limitation to be engineered around.

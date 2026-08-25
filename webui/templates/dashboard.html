@@ -27,6 +27,10 @@
       Vault password
       <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
     </label>
+    {% if not vault_configured %}
+    <p><small>No configuration has been saved yet: the next password you enter here becomes
+       the vault password, and unlocks it from then on.</small></p>
+    {% endif %}
     <button type="submit">Unlock</button>
   </form>
 </section>

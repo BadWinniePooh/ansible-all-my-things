@@ -79,6 +79,7 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         "pool_free": pool_status.free,
         "pool_used": pool_status.used,
         "defaults_refresh_available": seed.needs_defaults_refresh(),
+        "vault_configured": config.VAULT_FILE.exists(),
         **status,
     }
 
@@ -94,12 +95,46 @@ async def session_unlock(
     hcloud_token: str = Form(default=""),
     vault_password: str = Form(default=""),
 ):
+    """Rejects a value that doesn't actually work, rather than storing it
+    unlocked and letting it fail later deep inside a playbook run or a
+    vault read. A blank field means "leave unchanged" (SecretStore.unlock
+    only overwrites a field given a non-None value), so an invalid entry
+    is downgraded to blank rather than aborting the whole submission --
+    the other field in the same form may still be valid.
+    """
     session_id = request.state.session_id
-    secret_store.unlock(
-        session_id,
-        hcloud_token=hcloud_token or None,
-        vault_password=vault_password or None,
-    )
+    errors: list[str] = []
+
+    validated_token = hcloud_token or None
+    if hcloud_token:
+        try:
+            hcloud_api.validate_token(hcloud_token)
+        except hcloud_api.HetznerApiError as exc:
+            errors.append(f"Hetzner API token rejected: {exc}")
+            validated_token = None
+
+    validated_password = vault_password or None
+    if vault_password:
+        if config.VAULT_FILE.exists():
+            try:
+                vault.read_vault(vault_password)
+            except vault.VaultPasswordMismatch:
+                errors.append("Vault password does not match the existing configuration.")
+                validated_password = None
+        else:
+            # First-time setup (SC-006: no vault.yml is baked into the
+            # image or seeded into a fresh volume): whichever password is
+            # entered here becomes canonical, by creating an empty
+            # encrypted vault.yml under it now. Every later unlock is then
+            # checked against this file via the branch above.
+            vault.write_vault({}, vault_password)
+
+    secret_store.unlock(session_id, hcloud_token=validated_token, vault_password=validated_password)
+
+    if errors:
+        context = _dashboard_context(request, error=" ".join(errors))
+        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
+
     return RedirectResponse("/", status_code=303)
 
 
@@ -318,16 +353,42 @@ def _selected_from_preset(preset: presets.Preset) -> dict:
     }
 
 
+def _available_images(session_id: str, status: dict) -> tuple[list[dict], str | None]:
+    """Live catalogue from Hetzner when the token is unlocked, falling back
+    to the curated static list (config.UBUNTU_LTS_IMAGES) otherwise or on
+    any API failure -- the create page must still render and stay usable
+    even if the live lookup can't run."""
+    if not status["token_unlocked"]:
+        return config.UBUNTU_LTS_IMAGES, None
+
+    token = secret_store.hcloud_token(session_id)
+    try:
+        raw = hcloud_api.list_images(token)
+    except hcloud_api.HetznerApiError as exc:
+        return config.UBUNTU_LTS_IMAGES, f"Could not load images from Hetzner ({exc}); showing built-in defaults."
+
+    images = [
+        {"value": image["name"], "label": image.get("description") or image["name"], "support_end": None}
+        for image in raw
+        if image.get("name")
+    ]
+    if not images:
+        return config.UBUNTU_LTS_IMAGES, "Hetzner returned no available system images; showing built-in defaults."
+    return images, None
+
+
 def _create_form_context(
-    status: dict, *, error: str | None = None, selected: dict | None = None
+    status: dict, session_id: str, *, error: str | None = None, selected: dict | None = None
 ) -> dict:
+    images, images_notice = _available_images(session_id, status)
     return {
         **status,
         "error": error,
+        "notice": images_notice,
         "profiles": config.PROFILES,
         "server_types": config.SERVER_TYPES,
         "locations": config.LOCATIONS,
-        "images": config.UBUNTU_LTS_IMAGES,
+        "images": images,
         "presets": presets.list_presets(),
         "selected": selected or _default_selected(),
     }
@@ -344,7 +405,8 @@ def _create_choices_from_form(form) -> dict:
 
 @app.get("/create", response_class=HTMLResponse)
 async def create_form(request: Request, preset: str | None = None):
-    status = session_status_context(request.state.session_id)
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
     selected = None
     error = None
     if preset:
@@ -352,7 +414,7 @@ async def create_form(request: Request, preset: str | None = None):
             selected = _selected_from_preset(presets.get(preset))
         except presets.PresetNotFound:
             error = f"No preset named '{preset}'."
-    context = _create_form_context(status, error=error, selected=selected)
+    context = _create_form_context(status, session_id, error=error, selected=selected)
     return templates.TemplateResponse(request, "create.html", context)
 
 
@@ -373,7 +435,7 @@ async def create_start(request: Request):
 
     if not (status["token_unlocked"] and status["vault_unlocked"]):
         context = _create_form_context(
-            status, error="Both the Hetzner API token and the vault password must be unlocked."
+            status, session_id, error="Both the Hetzner API token and the vault password must be unlocked."
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
@@ -382,6 +444,7 @@ async def create_start(request: Request):
     if pool.next_free_name() is None:
         context = _create_form_context(
             status,
+            session_id,
             error="The hostname pool is exhausted. Add more names under Name pool "
             "before provisioning.",
         )
@@ -394,11 +457,11 @@ async def create_start(request: Request):
         await runner.start(session_id=session_id, action="provision", target=None, command=command)
     except RunAlreadyActive as exc:
         context = _create_form_context(
-            status, error=f"A {exc.active.action} run is already active. Wait for it to finish."
+            status, session_id, error=f"A {exc.active.action} run is already active. Wait for it to finish."
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _create_form_context(status, error=f"Missing: {', '.join(exc.missing)}.")
+        context = _create_form_context(status, session_id, error=f"Missing: {', '.join(exc.missing)}.")
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
     return RedirectResponse("/run", status_code=303)

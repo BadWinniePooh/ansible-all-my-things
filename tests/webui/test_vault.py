@@ -1,26 +1,50 @@
 """FR-018 (unmodelled keys survive a save untouched), the wrong-password
 error path, and FR-019 (a submitted managed-key value is discarded rather
 than merged). Exercises the real ansible-vault binary -- these tests only
-run where ansible-vault runs (Linux; not natively on Windows, where the
-ansible CLI's blocking-io check fails regardless of this feature).
+run where ansible-vault actually starts (Linux; not natively on Windows,
+where ansible-core's CLI startup guards in ansible/cli/__init__.py reject
+the process before any of our code runs -- either check_blocking_io() or
+initialize_locale(), depending on how stdio is attached. The locale guard
+specifically calls the raw C setlocale(LC_ALL, ''), which resolves from
+the Windows OS-level Region setting alone; confirmed neither PYTHONUTF8=1
+nor an LC_ALL/LANG env var changes its result on Windows -- there is no
+in-repo fix, only a machine-wide Windows Region setting change (out of
+scope here). shutil.which() alone can't detect this, since the binary is
+present and merely refuses to start, so this probes it for real instead.
 """
 
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import pytest
 
 from webui import vault
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("ansible-vault") is None, reason="ansible-vault not on PATH"
+
+def _ansible_vault_usable() -> bool:
+    if shutil.which("ansible-vault") is None:
+        return False
+    result = subprocess.run(["ansible-vault", "--version"], capture_output=True, text=True)
+    return result.returncode == 0
+
+
+# Scoped to only the two tests below that actually shell out to the real
+# binary -- test_missing_vault_file_reads_as_empty, apply_form_values and
+# merge exercise pure Python with no subprocess involved, so they keep
+# running (and passing) even where ansible-vault itself can't start.
+requires_ansible_vault = pytest.mark.skipif(
+    not _ansible_vault_usable(),
+    reason="ansible-vault not usable in this environment (missing, or an ansible-core CLI "
+    "startup guard rejects it -- see module docstring)",
 )
 
 PASSWORD = "correct-vault-password"  # noqa: S105
 WRONG_PASSWORD = "wrong-vault-password"  # noqa: S105
 
 
+@requires_ansible_vault
 def test_round_trip_preserves_an_unmodelled_key(tmp_path):
     vault_file = tmp_path / "vault.yml"
     original = {
@@ -44,6 +68,7 @@ def test_round_trip_preserves_an_unmodelled_key(tmp_path):
     assert final["vault_my_ssh_key_name"] == "prior-key"
 
 
+@requires_ansible_vault
 def test_wrong_password_raises_and_leaves_file_untouched(tmp_path):
     vault_file = tmp_path / "vault.yml"
     vault.write_vault({"vault_my_ansible_user_name": "alice"}, PASSWORD, vault_file=vault_file)

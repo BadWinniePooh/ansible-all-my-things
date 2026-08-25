@@ -1,9 +1,8 @@
-"""Direct Hetzner Cloud API calls, scoped to the SSH key endpoints only
-(research.md section 10): list by name, create, delete. Everything else
-about a machine's lifecycle goes through the playbooks via webui/runner.py
--- this module exists only because SSH key registration is control-plane
-application logic that Principle II does not let a playbook express
-inline.
+"""Direct Hetzner Cloud API calls: SSH key management (research.md section
+10) and OS image listing. Everything about a machine's actual lifecycle
+still goes through the playbooks via webui/runner.py -- this module exists
+only for read-only lookups and account mutations that Principle II does not
+let a playbook express inline.
 """
 
 from __future__ import annotations
@@ -59,3 +58,34 @@ def delete_ssh_key(token: str, key_id: int) -> None:
         f"{API_BASE}/ssh_keys/{key_id}", headers=_headers(token), timeout=_TIMEOUT
     )
     _raise_for_status(response)
+
+
+def validate_token(token: str) -> None:
+    """Raises HetznerApiError if Hetzner rejects the token. /session/unlock
+    calls this before storing anything, rather than accepting any string
+    and letting a bogus token surface only much later, deep inside a
+    playbook run. /locations is a cheap, read-only, always-present
+    endpoint -- any valid token can read it, so it makes a minimal-impact
+    liveness check."""
+    response = httpx.get(f"{API_BASE}/locations", headers=_headers(token), timeout=_TIMEOUT)
+    _raise_for_status(response)
+
+
+def list_images(token: str) -> list[dict]:
+    """OS images available for the account, restricted to the x86 system
+    images the configured server types (cx23/cx33/cx43, all shared-vCPU
+    x86) can actually boot -- not snapshots, apps, backups, or deprecated
+    images."""
+    response = httpx.get(
+        f"{API_BASE}/images",
+        headers=_headers(token),
+        params={
+            "type": "system",
+            "status": "available",
+            "architecture": "x86",
+            "sort": "name:asc",
+        },
+        timeout=_TIMEOUT,
+    )
+    _raise_for_status(response)
+    return response.json().get("images", [])
