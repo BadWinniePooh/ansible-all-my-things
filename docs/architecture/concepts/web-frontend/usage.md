@@ -93,10 +93,16 @@ a location it cannot be ordered in. The interface never silently substitutes a
 default for a choice that was not made — including when saving a preset, which
 would otherwise hand the wrong choice back on every later load of it.
 
-The image list has an *Other* free-text field for anything not listed, such as
-`debian-12`. What is typed there wins over the selected radio option, and it is
-passed through as given: an image name Hetzner does not know fails during the
-run, not on this screen.
+**The image list and the *Other* field are exclusive.** *Other* takes a
+free-text image name for anything not listed, such as `debian-12`. Typing into
+it clears the selection in the list above and dims it, because free text is
+what actually gets used — leaving an entry looking selected would misreport
+what is about to be provisioned. Clicking an entry in the list is how you
+switch back; that empties the free-text field. Emptying it by hand restores
+whatever was selected before.
+
+A free-text name is passed through as given: one Hetzner does not know fails
+during the run, not on this screen.
 
 *Preview command* renders the exact `ansible-playbook` invocation the current
 choices produce, without running anything.

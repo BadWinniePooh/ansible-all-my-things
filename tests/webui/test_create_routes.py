@@ -325,6 +325,36 @@ def test_create_keeps_the_submitted_choices_when_it_refuses(
     assert 'value="debian-12"' in response.text
 
 
+def test_free_text_image_leaves_the_image_list_unselected_on_redisplay(
+    client, unlocked, no_network, ready_to_provision
+):
+    """Free text wins over the radio list, so a redisplayed form must not
+    show a list entry as chosen -- it would misreport what will be
+    provisioned. The browser enforces the same rule live
+    (webui/static/image-choice.js); this is the no-scripting path."""
+    response = client.post(
+        "/create",
+        data={
+            **VALID_FORM,
+            "image_select": "ubuntu-24.04",
+            "image_custom": "debian-12",
+            "location": "",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    body = response.text.replace(" >", ">")
+    assert 'value="ubuntu-24.04" checked' not in body
+    assert "checked" not in body.split('id="image-options"')[1].split("</div>")[0]
+    assert 'value="debian-12"' in body
+
+
+def test_the_page_loads_the_script_enforcing_that_exclusivity(client, no_network):
+    assert "/static/image-choice.js" in client.get("/create").text
+    assert client.get("/static/image-choice.js").status_code == 200
+
+
 def test_create_starts_a_run_for_a_valid_submission(
     client, unlocked, no_network, ready_to_provision
 ):

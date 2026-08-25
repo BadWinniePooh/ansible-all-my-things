@@ -506,12 +506,16 @@ def _selected_from_form(form) -> dict:
     than reset to defaults."""
     known_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
     image_select = (form.get("image_select") or "").strip()
+    image_custom = (form.get("image_custom") or "").strip()
     return {
         "profile": (form.get("profile") or "").strip() or next(iter(config.PROFILES)),
         "server_type": (form.get("server_type") or "").strip(),
         "location": (form.get("location") or "").strip(),
-        "image": image_select if image_select in known_images else None,
-        "image_custom": (form.get("image_custom") or "").strip(),
+        # Free text overrides the list when both arrive (a submission made
+        # with scripting off), so the redisplayed list shows nothing
+        # selected rather than an option that would be ignored.
+        "image": None if image_custom else (image_select if image_select in known_images else None),
+        "image_custom": image_custom,
     }
 
 

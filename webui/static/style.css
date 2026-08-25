@@ -87,6 +87,12 @@ form label {
   margin-bottom: 0.5rem;
 }
 
+/* The image list while free text overrides it: dimmed, still readable and
+   still clickable -- clicking one is how the user switches back. */
+.choice-superseded {
+  opacity: 0.55;
+}
+
 input, select, button {
   font: inherit;
   padding: 0.35rem 0.5rem;
