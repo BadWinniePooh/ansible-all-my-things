@@ -1,4 +1,8 @@
 <div id="command-preview">
+  {% if error %}
+  <p class="banner banner-error">{{ error }}</p>
+  {% else %}
   <p><strong>This will run:</strong></p>
   <pre class="run-output">{{ command | join(' ') }}</pre>
+  {% endif %}
 </div>

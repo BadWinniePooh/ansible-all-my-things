@@ -9,6 +9,7 @@ process's own bind address.
 
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 
@@ -481,12 +482,98 @@ def _create_form_context(
     }
 
 
-def _create_choices_from_form(form) -> dict:
+def _with_catalogue_notice(message: str, notice: str | None) -> str:
+    """A live lookup that fell back to the built-in lists changes what
+    counts as a valid size, so its notice is appended to the rejection --
+    otherwise "not available" reads as wrong when the real cause is that
+    the live catalogue could not be reached."""
+    return f"{message} {notice}" if notice else message
+
+
+class CreateChoicesInvalid(ValueError):
+    """A create-form submission is missing a required choice, or names one
+    that cannot be ordered. Carries a user-facing message naming the field
+    at fault."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+def _selected_from_form(form) -> dict:
+    """The submitted choices in the shape the create template expects, so a
+    rejected submission is redisplayed with what the user picked rather
+    than reset to defaults."""
+    known_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
+    image_select = (form.get("image_select") or "").strip()
     return {
-        "profile": form.get("profile") or next(iter(config.PROFILES)),
-        "server_type": form.get("server_type") or next(iter(config.SERVER_TYPES)),
-        "location": form.get("location") or next(iter(config.LOCATIONS)),
-        "image": form.get("image_custom") or form.get("image_select") or config.UBUNTU_LTS_IMAGES[0]["value"],
+        "profile": (form.get("profile") or "").strip() or next(iter(config.PROFILES)),
+        "server_type": (form.get("server_type") or "").strip(),
+        "location": (form.get("location") or "").strip(),
+        "image": image_select if image_select in known_images else None,
+        "image_custom": (form.get("image_custom") or "").strip(),
+    }
+
+
+def _server_types_for_submission(session_id: str, status: dict, form) -> tuple[dict[str, dict], str | None]:
+    """Resolve the size catalogue a submission was rendered against. The
+    create form carries its own "show all sizes" toggle state in
+    server_types_live (create.html), so a live-only size validates as
+    itself instead of looking unknown against the static list."""
+    return _resolve_server_types(session_id, status, live=bool(form.get("server_types_live")))
+
+
+def _create_choices_from_form(form, server_types: dict) -> dict:
+    """Validate a create-form submission against the catalogue it was
+    rendered from, and return the four provisioning choices.
+
+    Principle XII (Fail Loud): a missing or unorderable choice raises here
+    rather than falling back to a hardcoded default. Substituting one
+    silently would provision a machine whose profile, size, location or
+    image differs from what the operator selected, and would defer an
+    unorderable size/location pair to a failure inside the Hetzner API
+    instead of reporting it at the point of the gap.
+    """
+    profile = (form.get("profile") or "").strip()
+    if not profile:
+        raise CreateChoicesInvalid("Select a profile before provisioning.")
+    if profile not in config.PROFILES:
+        raise CreateChoicesInvalid(
+            f"Profile '{profile}' is not one of: {', '.join(config.PROFILES)}."
+        )
+
+    server_type = (form.get("server_type") or "").strip()
+    if not server_type:
+        raise CreateChoicesInvalid("Select a server size before provisioning.")
+    if server_type not in server_types:
+        raise CreateChoicesInvalid(
+            f"Server size '{server_type}' is not available. Pick one from the size table."
+        )
+
+    locations = _locations_for_server_type(server_types, server_type)
+    location = (form.get("location") or "").strip()
+    if not location:
+        raise CreateChoicesInvalid("Select a location before provisioning.")
+    if location not in locations:
+        raise CreateChoicesInvalid(
+            f"Server size '{server_type}' cannot be ordered in location '{location}'. "
+            f"Available: {', '.join(locations) or 'none'}."
+        )
+
+    # Free text is a deliberate escape hatch (create.html "Other"), so the
+    # image is checked for presence only -- an unknown name is the user's
+    # choice to make, and Hetzner rejects it by name if it does not exist.
+    image = (form.get("image_custom") or "").strip() or (form.get("image_select") or "").strip()
+    if not image:
+        raise CreateChoicesInvalid(
+            "Select an operating system image, or type one into the free-text field."
+        )
+
+    return {
+        "profile": profile,
+        "server_type": server_type,
+        "location": location,
+        "image": image,
     }
 
 
@@ -588,10 +675,21 @@ async def create_form(request: Request, preset: str | None = None):
 @app.post("/create/preview", response_class=HTMLResponse)
 async def create_preview(request: Request):
     """FR-031: show exactly what will run, without running it."""
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
     form = await request.form()
-    command = build_provision_command(**_create_choices_from_form(form))
+    server_types, notice = _server_types_for_submission(session_id, status, form)
+    try:
+        choices = _create_choices_from_form(form, server_types)
+    except CreateChoicesInvalid as exc:
+        return templates.TemplateResponse(
+            request,
+            "fragments/command_preview.html",
+            {"command": None, "error": _with_catalogue_notice(exc.message, notice)},
+            status_code=400,
+        )
     return templates.TemplateResponse(
-        request, "fragments/command_preview.html", {"command": command}
+        request, "fragments/command_preview.html", {"command": build_provision_command(**choices)}
     )
 
 
@@ -618,7 +716,21 @@ async def create_start(request: Request):
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
     form = await request.form()
-    command = build_provision_command(**_create_choices_from_form(form))
+    server_types, notice = _server_types_for_submission(session_id, status, form)
+    try:
+        choices = _create_choices_from_form(form, server_types)
+    except CreateChoicesInvalid as exc:
+        # FR-045 in spirit: refuse before any provider call. Redisplayed
+        # with the submitted choices so nothing the user picked is lost.
+        context = _create_form_context(
+            status,
+            session_id,
+            error=_with_catalogue_notice(exc.message, notice),
+            selected=_selected_from_form(form),
+        )
+        return templates.TemplateResponse(request, "create.html", context, status_code=400)
+
+    command = build_provision_command(**choices)
 
     try:
         await runner.start(session_id=session_id, action="provision", target=None, command=command)
@@ -800,13 +912,19 @@ async def presets_save(request: Request):
             '<p class="banner banner-error">A preset name is required.</p>', status_code=400
         )
 
-    preset = presets.Preset(
-        name=name,
-        profile=form.get("profile") or next(iter(config.PROFILES)),
-        server_type=form.get("server_type") or next(iter(config.SERVER_TYPES)),
-        location=form.get("location") or next(iter(config.LOCATIONS)),
-        image=form.get("image_custom") or form.get("image_select") or "ubuntu-24.04",
-    )
+    # Same validation as provisioning itself: a preset that silently
+    # recorded a default the user never picked would hand that wrong choice
+    # back on every future load of it (Principle XII).
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    server_types, notice = _server_types_for_submission(session_id, status, form)
+    try:
+        choices = _create_choices_from_form(form, server_types)
+    except CreateChoicesInvalid as exc:
+        message = html.escape(_with_catalogue_notice(exc.message, notice))
+        return HTMLResponse(f'<p class="banner banner-error">{message}</p>', status_code=400)
+
+    preset = presets.Preset(name=name, **choices)
 
     try:
         presets.save(preset)
