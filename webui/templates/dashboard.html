@@ -115,7 +115,15 @@
     <tbody>
       {% for machine in machines %}
       <tr>
-        <td><span class="machine-name">{{ machine.name }}</span></td>
+        <td>
+          {# The dot carries the account's power state when it is known; a
+             machine nobody has asked about keeps the neutral one. Colour is
+             a second signal only, so anything but "running" also says so. #}
+          <span class="machine-name machine-{{ machine.status or 'unread' }}">{{ machine.name }}</span>
+          {% if machine.status and machine.status != 'running' %}
+          <span class="tag">{{ machine.status }}</span>
+          {% endif %}
+        </td>
         <td class="mono muted">{{ machine.address or "unknown" }}</td>
         <td><span class="tag">{{ machine.profile or "unknown" }}</span></td>
         <td class="mono">{{ machine.server_type or "unknown" }}</td>

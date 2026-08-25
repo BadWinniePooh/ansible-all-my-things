@@ -131,6 +131,37 @@ def find_image(token: str, reference: str) -> dict | None:
     return images[0] if images else None
 
 
+def list_servers(token: str) -> list[dict]:
+    """Every server in the account.
+
+    The machine records the playbooks write only carry what an SSH
+    connection needs, and the interface's own side file only knows about
+    machines it provisioned itself -- so size and location read as
+    "unknown" for anything created from the command line, restored from a
+    backup, or provisioned before that file existed. The account itself is
+    the authority on what a machine actually is, so the dashboard asks it.
+
+    Paginated defensively: the default page size is 25, and a pool of ten
+    names is not a guarantee that an account holds ten servers.
+    """
+    servers: list[dict] = []
+    page = 1
+    while True:
+        response = httpx.get(
+            f"{API_BASE}/servers",
+            headers=_headers(token),
+            params={"page": page, "per_page": 50, "sort": "name:asc"},
+            timeout=_TIMEOUT,
+        )
+        _raise_for_status(response)
+        payload = response.json()
+        servers.extend(payload.get("servers", []))
+        next_page = ((payload.get("meta") or {}).get("pagination") or {}).get("next_page")
+        if not next_page:
+            return servers
+        page = next_page
+
+
 def list_server_types(token: str) -> list[dict]:
     """Server types (sizes) available for the account. /server_types has no
     architecture or deprecation filter params (unlike /images), so both are

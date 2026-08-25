@@ -406,6 +406,17 @@ table[data-sortable] th[data-sort-dir="desc"]::after {
   background: var(--c-positive);
   flex: none;
 }
+/* Power state as the account reports it. "unread" is nobody having asked
+   -- the API token is locked or the lookup failed -- not a machine that
+   is off, so it takes the neutral grey rather than the critical colour. */
+.machine-unread::before { background: var(--text-faint); }
+.machine-running::before { background: var(--c-positive); }
+.machine-off::before,
+.machine-stopping::before { background: var(--c-critical); }
+.machine-initializing::before,
+.machine-starting::before,
+.machine-migrating::before,
+.machine-rebuilding::before { background: var(--c-accent); }
 .tag {
   display: inline-flex;
   align-items: center;

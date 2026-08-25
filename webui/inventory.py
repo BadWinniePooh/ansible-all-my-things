@@ -7,13 +7,15 @@ ever recorded what an SSH connection needs. They are tracked separately in
 config.MACHINE_DETAILS_FILE, written by webui/runner.py when a
 provisioning run succeeds and pruned when a destroy run succeeds. A
 machine that predates the interface (created from the command line) has
-no entry there and reports size/location as None rather than guessing.
+no entry there and would report size/location as None rather than
+guessing -- so when the API token is unlocked the dashboard overlays what
+the account itself says, through merge_account_detail below.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -30,6 +32,41 @@ class Machine:
     profile: str | None
     server_type: str | None
     location: str | None
+    # Filled in from the Hetzner account when the API token is unlocked
+    # (webui/app.py _machines_with_account_detail). None means nobody has
+    # asked the account, not that the machine is off.
+    status: str | None = None
+
+
+def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[Machine]:
+    """Overlay what the account says about each machine.
+
+    The account is the authority on size, location, address and power
+    state; the local records are the authority on which machines this
+    installation manages and which profile each was given, which Hetzner
+    knows nothing about. So this fills gaps and corrects drift without
+    adding or removing rows: a server in the account that this
+    installation does not manage is not its business.
+    """
+    by_name = {server.get("name"): server for server in servers}
+    merged = []
+    for machine in machines:
+        server = by_name.get(machine.name)
+        if server is None:
+            merged.append(machine)
+            continue
+        datacenter = server.get("datacenter") or {}
+        public_net = server.get("public_net") or {}
+        merged.append(
+            replace(
+                machine,
+                address=(public_net.get("ipv4") or {}).get("ip") or machine.address,
+                server_type=(server.get("server_type") or {}).get("name") or machine.server_type,
+                location=(datacenter.get("location") or {}).get("name") or machine.location,
+                status=server.get("status"),
+            )
+        )
+    return merged
 
 
 def _load_details(details_file: Path) -> dict[str, dict[str, str]]:

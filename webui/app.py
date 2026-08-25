@@ -9,7 +9,6 @@ process's own bind address.
 
 from __future__ import annotations
 
-import html
 import json
 from dataclasses import asdict
 from pathlib import Path
@@ -19,7 +18,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, hcloud_api, inventory, pool, presets, seed, sshkeys, vault
+from . import config, hcloud_api, inventory, messages, pool, presets, seed, sshkeys, vault
 from .runner import (
     RunAlreadyActive,
     Runner,
@@ -85,14 +84,36 @@ def session_status_context(session_id: str) -> dict:
     return secret_store.status(session_id)
 
 
+def _machines_with_account_detail(session_id: str, status: dict) -> tuple[list, str | None]:
+    """The managed machines, with what the Hetzner account says about them.
+
+    Size, location and address are only recorded locally for machines this
+    installation provisioned itself, so anything created from the command
+    line reads as "unknown" until the account is asked. A lookup that fails
+    is reported rather than swallowed: the rows are then the local records,
+    which is a weaker answer than the one the page normally shows.
+    """
+    machines = inventory.list_machines()
+    if not machines or not status["token_unlocked"]:
+        return machines, None
+    try:
+        servers = hcloud_api.list_servers(secret_store.hcloud_token(session_id))
+    except hcloud_api.HetznerApiError as exc:
+        return machines, f"Could not read machine details from Hetzner ({exc})."
+    return inventory.merge_account_detail(machines, servers), None
+
+
 def _dashboard_context(request: Request, *, error: str | None = None, notice: str | None = None) -> dict:
     session_id = request.state.session_id
     status = session_status_context(session_id)
     pool_status = pool.status()
+    machines, machines_notice = _machines_with_account_detail(session_id, status)
+    if machines_notice:
+        notice = f"{notice} {machines_notice}" if notice else machines_notice
     return {
         "error": error,
         "notice": notice,
-        "machines": inventory.list_machines(),
+        "machines": machines,
         "pool_entries": pool_status.entries,
         "pool_free": pool_status.free,
         "pool_used": pool_status.used,
@@ -105,8 +126,9 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    return templates.TemplateResponse(request, "dashboard.html", _dashboard_context(request))
+async def dashboard(request: Request, done: str | None = None):
+    context = _dashboard_context(request, notice=messages.notice_for(done))
+    return templates.TemplateResponse(request, "dashboard.html", context)
 
 
 @app.post("/session/unlock")
@@ -155,19 +177,35 @@ async def session_unlock(
         context = _dashboard_context(request, error=" ".join(errors))
         return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
-    return RedirectResponse("/", status_code=303)
+    return messages.done("/", "session-unlocked")
 
 
 @app.post("/session/lock")
 async def session_lock(request: Request):
     secret_store.lock(request.state.session_id)
-    return RedirectResponse("/", status_code=303)
+    return messages.done("/", "session-locked")
 
 
 @app.get("/session/status", response_class=HTMLResponse)
 async def session_status(request: Request):
     status = session_status_context(request.state.session_id)
     return templates.TemplateResponse(request, "fragments/session_status.html", status)
+
+
+def _flash(
+    request: Request, message: str, *, tone: str = "notice", status_code: int = 200
+) -> HTMLResponse:
+    """One banner, swapped into the page by htmx.
+
+    Rendered from the same template the full pages use, so a message
+    delivered into a fragment looks like a message delivered on a reload.
+    """
+    return templates.TemplateResponse(
+        request,
+        "fragments/flash.html",
+        {"message": message, "tone": tone},
+        status_code=status_code,
+    )
 
 
 def _desktop_users_from_form(form) -> list[dict]:
@@ -181,11 +219,12 @@ def _desktop_users_from_form(form) -> list[dict]:
 
 
 @app.get("/vault", response_class=HTMLResponse)
-async def vault_form(request: Request):
+async def vault_form(request: Request, done: str | None = None):
     status = session_status_context(request.state.session_id)
+    notice = messages.notice_for(done)
     if not status["vault_unlocked"]:
         return templates.TemplateResponse(
-            request, "vault.html", {**status, "values": {}, "desktop_users": []}
+            request, "vault.html", {**status, "notice": notice, "values": {}, "desktop_users": []}
         )
 
     password = secret_store.vault_password(request.state.session_id)
@@ -201,7 +240,9 @@ async def vault_form(request: Request):
     template = vault.load_template()
     desktop_users = existing.get("vault_desktop_users") or template.get("vault_desktop_users") or []
     return templates.TemplateResponse(
-        request, "vault.html", {**status, "values": existing, "desktop_users": desktop_users}
+        request,
+        "vault.html",
+        {**status, "notice": notice, "values": existing, "desktop_users": desktop_users},
     )
 
 
@@ -245,7 +286,7 @@ async def vault_save(request: Request):
 
     merged = vault.apply_form_values(existing, form_values)
     vault.write_vault(merged, password)
-    return RedirectResponse("/vault", status_code=303)
+    return messages.done("/vault", "vault-saved")
 
 
 @app.post("/vault/users", response_class=HTMLResponse)
@@ -283,10 +324,11 @@ def _sshkey_base_context(status: dict) -> dict:
 
 
 @app.get("/sshkey", response_class=HTMLResponse)
-async def sshkey_page(request: Request):
+async def sshkey_page(request: Request, done: str | None = None):
     session_id = request.state.session_id
     status = session_status_context(session_id)
     context = _sshkey_base_context(status)
+    context["notice"] = messages.notice_for(done)
     if context["public_key"] and status["vault_unlocked"]:
         try:
             existing = vault.read_vault(secret_store.vault_password(session_id))
@@ -322,7 +364,10 @@ async def _handle_sshkey_action(request: Request, *, action_path: str, confirm_r
         context["error"] = str(exc)
         return templates.TemplateResponse(request, "sshkey.html", context, status_code=502)
 
-    return RedirectResponse("/sshkey", status_code=303)
+    return messages.done(
+        "/sshkey",
+        "sshkey-rotated" if action_path == "/sshkey/rotate" else "sshkey-generated",
+    )
 
 
 @app.post("/sshkey/generate")
@@ -872,7 +917,7 @@ async def create_form(request: Request, preset: str | None = None):
         try:
             saved = presets.get(preset)
         except presets.PresetNotFound:
-            error = f"No preset named '{preset}'."
+            error = messages.preset_missing(preset)
         else:
             # Resolved against the catalogue the preset was saved with, so
             # a live-only size or image is matched against the list that
@@ -970,11 +1015,13 @@ async def create_start(request: Request):
         )
     except RunAlreadyActive as exc:
         context = _create_form_context(
-            status, session_id, error=f"A {exc.active.action} run is already active. Wait for it to finish."
+            status, session_id, error=messages.run_already_active(exc.active.action)
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _create_form_context(status, session_id, error=f"Missing: {', '.join(exc.missing)}.")
+        context = _create_form_context(
+            status, session_id, error=messages.secrets_missing(exc.missing)
+        )
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
     return RedirectResponse("/run", status_code=303)
@@ -1042,11 +1089,11 @@ async def machine_configure(name: str, request: Request):
         await runner.start(session_id=session_id, action="configure", target=name, command=command)
     except RunAlreadyActive as exc:
         context = _dashboard_context(
-            request, error=f"A {exc.active.action} run is already active. Wait for it to finish."
+            request, error=messages.run_already_active(exc.active.action)
         )
         return templates.TemplateResponse(request, "dashboard.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _dashboard_context(request, error=f"Missing: {', '.join(exc.missing)}.")
+        context = _dashboard_context(request, error=messages.secrets_missing(exc.missing))
         return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
     return RedirectResponse("/run", status_code=303)
@@ -1077,24 +1124,30 @@ async def machine_destroy(name: str, request: Request, confirm_name: str = Form(
         await runner.start(session_id=session_id, action="destroy", target=name, command=command)
     except RunAlreadyActive as exc:
         context = _dashboard_context(
-            request, error=f"A {exc.active.action} run is already active. Wait for it to finish."
+            request, error=messages.run_already_active(exc.active.action)
         )
         return templates.TemplateResponse(request, "dashboard.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _dashboard_context(request, error=f"Missing: {', '.join(exc.missing)}.")
+        context = _dashboard_context(request, error=messages.secrets_missing(exc.missing))
         return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
     return RedirectResponse("/run", status_code=303)
 
 
 @app.get("/pool", response_class=HTMLResponse)
-async def pool_page(request: Request):
+async def pool_page(request: Request, done: str | None = None):
     status = session_status_context(request.state.session_id)
     pool_status = pool.status()
     return templates.TemplateResponse(
         request,
         "pool.html",
-        {**status, "entries": pool_status.entries, "used": pool_status.used, "free": pool_status.free},
+        {
+            **status,
+            "notice": messages.notice_for(done),
+            "entries": pool_status.entries,
+            "used": pool_status.used,
+            "free": pool_status.free,
+        },
     )
 
 
@@ -1122,14 +1175,16 @@ async def pool_save(request: Request):
         }
         return templates.TemplateResponse(request, "pool.html", context, status_code=400)
 
-    return RedirectResponse("/pool", status_code=303)
+    return messages.done("/pool", "pool-saved")
 
 
 @app.get("/presets", response_class=HTMLResponse)
-async def presets_page(request: Request):
+async def presets_page(request: Request, done: str | None = None):
     status = session_status_context(request.state.session_id)
     return templates.TemplateResponse(
-        request, "presets.html", {**status, "presets": presets.list_presets()}
+        request,
+        "presets.html",
+        {**status, "notice": messages.notice_for(done), "presets": presets.list_presets()},
     )
 
 
@@ -1143,9 +1198,7 @@ async def presets_save(request: Request):
     form = await request.form()
     name = (form.get("name") or "").strip()
     if not name:
-        return HTMLResponse(
-            '<p class="banner banner-error">A preset name is required.</p>', status_code=400
-        )
+        return _flash(request, messages.preset_name_required(), tone="error", status_code=400)
 
     # Same validation as provisioning itself: a preset that silently
     # recorded a default the user never picked would hand that wrong choice
@@ -1156,8 +1209,12 @@ async def presets_save(request: Request):
     try:
         choices = _create_choices_from_form(form, server_types)
     except CreateChoicesInvalid as exc:
-        message = html.escape(_with_catalogue_notice(exc.message, notice))
-        return HTMLResponse(f'<p class="banner banner-error">{message}</p>', status_code=400)
+        return _flash(
+            request,
+            _with_catalogue_notice(exc.message, notice),
+            tone="error",
+            status_code=400,
+        )
 
     # Saved with the catalogue the choices were made against: a size or
     # image that only exists in the live catalogue is unrestorable without
@@ -1171,22 +1228,14 @@ async def presets_save(request: Request):
 
     already = _matching_preset(_selected_from_form(form), presets.list_presets())
     if already and already != name:
-        return HTMLResponse(
-            '<p class="banner banner-notice">These choices are already saved as '
-            f"&#39;{html.escape(already)}&#39;.</p>",
-            status_code=409,
-        )
+        return _flash(request, messages.preset_already_saved(already), status_code=409)
 
     try:
         presets.save(preset)
     except presets.PresetNameTaken:
-        return HTMLResponse(
-            f'<p class="banner banner-error">A preset named &#39;{name}&#39; already exists. '
-            "Rename or delete it first.</p>",
-            status_code=409,
-        )
+        return _flash(request, messages.preset_name_taken(name), tone="error", status_code=409)
 
-    return HTMLResponse(f'<p class="banner banner-notice">Saved preset &#39;{name}&#39;.</p>')
+    return _flash(request, messages.preset_saved(name))
 
 
 @app.post("/presets/{name}/delete")
@@ -1195,7 +1244,7 @@ async def presets_delete(name: str):
         presets.delete(name)
     except presets.PresetNotFound:
         pass
-    return RedirectResponse("/presets", status_code=303)
+    return messages.done("/presets", "preset-deleted")
 
 
 @app.post("/presets/{name}/rename")
@@ -1207,18 +1256,18 @@ async def presets_rename(name: str, request: Request, new_name: str = Form(defau
         context = {
             **status,
             "presets": presets.list_presets(),
-            "error": f"A preset named '{new_name}' already exists.",
+            "error": messages.preset_name_taken(new_name),
         }
         return templates.TemplateResponse(request, "presets.html", context, status_code=409)
     except presets.PresetNotFound:
         context = {
             **status,
             "presets": presets.list_presets(),
-            "error": f"No preset named '{name}'.",
+            "error": messages.preset_missing(name),
         }
         return templates.TemplateResponse(request, "presets.html", context, status_code=404)
 
-    return RedirectResponse("/presets", status_code=303)
+    return messages.done("/presets", "preset-renamed")
 
 
 @app.post("/defaults/refresh")
@@ -1228,4 +1277,4 @@ async def defaults_refresh(request: Request):
     encrypted configuration, machine records, name pool or presets.
     """
     seed.refresh_defaults()
-    return RedirectResponse("/", status_code=303)
+    return messages.done("/", "defaults-refreshed")
