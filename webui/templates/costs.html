@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% set active = 'costs' %}
+{% block title %}Costs — Steward{% endblock %}
+{% block heading %}Costs{% endblock %}
+{% block topbar %}
+  {% if cost.current %}
+  <span class="status-badge running">{{ cost.current.total | euro }} this month</span>
+  {% endif %}
+{% endblock %}
+{% block content %}
+
+<p class="page-note">
+  Estimated from what your account charges for each machine — hourly, capped at the
+  server type's monthly price. This is the server line of the invoice and nothing else:
+  the primary IPv4 address, traffic over the included volume, snapshots, volumes and
+  backups are not counted, so the invoice will be a little higher, never lower.
+</p>
+
+<div class="columns">
+
+  <section>
+    <h2>This month</h2>
+    <div class="card-body">
+      {% if cost.machines %}
+      <div class="breakdown">
+        {% set dearest = cost.machines[0][1] %}
+        {% for life, amount in cost.machines %}
+        <div class="breakdown-row">
+          <span class="name mono">{{ life.name }}</span>
+          <span class="breakdown-track">
+            <span class="breakdown-fill {{ '' if life.is_open else 'is-past' }}"
+                  style="width: {{ (amount / dearest * 100) | round(1) }}%"></span>
+          </span>
+          <span class="amount">{{ amount | euro }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="legend">
+        <span><i class="swatch-running"></i>still running</span>
+        <span><i class="swatch-gone"></i>destroyed this month</span>
+      </div>
+      {% else %}
+      <p class="card-note">No machine has cost anything this month.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Running now</h2>
+    <div class="card-body">
+      <div class="figure">
+        <span class="figure-value">{{ cost.hourly | euro_rate }}</span>
+        <span class="figure-unit">while these are up</span>
+      </div>
+      {% if cost.running %}
+      <dl class="kv">
+        {% for life in cost.running %}
+        <dt class="mono">{{ life.name }}</dt>
+        <dd>
+          {{ life.server_type or 'unknown size' }} in {{ life.location or 'an unknown location' }},
+          {{ life.rates.hourly | euro_rate }}
+          {% if life.rates.monthly %}<span class="helper">capped at {{ life.rates.monthly | euro }} a month</span>{% endif %}
+        </dd>
+        {% endfor %}
+      </dl>
+      {% else %}
+      <p class="card-note">Nothing is running, so nothing is accruing.</p>
+      {% endif %}
+    </div>
+  </section>
+
+</div>
+
+<section>
+  <h2>Every month</h2>
+  <table>
+    <thead>
+      <tr><th>Month</th><th>Machines</th><th class="num">Cost</th></tr>
+    </thead>
+    <tbody>
+      {% for month in cost.months | reverse %}
+      <tr>
+        <td>{{ month.long_label }}</td>
+        <td class="muted">
+          {% set names = cost.month_machines[month.label] | default([]) %}
+          {{ names | join(', ') if names else '—' }}
+        </td>
+        <td class="num mono">
+          {{ month.total | euro }}
+          {% if month.is_current %}
+          <span class="helper" style="display: block">so far · {{ month.projected | euro }} projected</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

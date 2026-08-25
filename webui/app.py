@@ -62,7 +62,15 @@ def _shell_context(request: Request) -> dict:
     this by construction: both read the same store.
     """
     session_id = getattr(request.state, "session_id", None)
-    return secret_store.status(session_id)
+    # The sidebar carries the machine count beside the lock states, so it
+    # is answered for every page rather than for the dashboard alone. Read
+    # from the ledger, which holds what the account last reported, so no
+    # page render costs an API call to draw a badge; the local records
+    # answer before the account has ever been read.
+    return {
+        **secret_store.status(session_id),
+        "machine_count": len(costs.open_lives()) or len(inventory.list_machines()),
+    }
 
 
 templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_shell_context])
@@ -76,7 +84,17 @@ def _euro(amount: float | None) -> str:
     return f"€{amount:,.2f}"
 
 
+def _euro_rate(amount: float | None) -> str:
+    """An hourly rate. Three decimals, because a cent an hour is the order
+    of magnitude here and €0.01 would round two machines to the same
+    figure."""
+    if amount is None:
+        return "nothing"
+    return f"€{amount:,.3f}/h"
+
+
 templates.env.filters["euro"] = _euro
+templates.env.filters["euro_rate"] = _euro_rate
 
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -152,6 +170,54 @@ def _server_names(servers: list[dict]) -> list[str]:
     return [name for name in (server.get("name") for server in servers) if name]
 
 
+def _spark(points: list[float], *, width: float = 300, height: float = 62) -> dict[str, str]:
+    """A sparkline as two paths: the line, and the area under it.
+
+    Computed here rather than in the template because a chart is
+    arithmetic, and Jinja is a bad place to do arithmetic. A flat run of
+    months sits on the baseline rather than dividing by a zero range.
+    """
+    if not points:
+        return {"line": "", "area": "", "last_x": "0", "last_y": "0"}
+    top, bottom = 4.0, height - 4
+    highest = max(points) or 1.0
+    step = (width - 12) / max(len(points) - 1, 1)
+    coordinates = [
+        (6 + index * step, bottom - (value / highest) * (bottom - top))
+        for index, value in enumerate(points)
+    ]
+    line = " ".join(
+        f"{'M' if index == 0 else 'L'}{x:.1f},{y:.1f}"
+        for index, (x, y) in enumerate(coordinates)
+    )
+    last_x, last_y = coordinates[-1]
+    return {
+        "line": line,
+        "area": f"{line} L{last_x:.1f},{bottom:.1f} L{coordinates[0][0]:.1f},{bottom:.1f} Z",
+        "last_x": f"{last_x:.1f}",
+        "last_y": f"{last_y:.1f}",
+    }
+
+
+def _cost_summary(now: datetime, *, months: int = 6) -> dict:
+    """What the dashboard card and the costs screen both say.
+
+    Every figure here is an estimate of the server line of the invoice and
+    nothing else -- the templates say so wherever one is shown.
+    """
+    history = costs.month_totals(now, months=months)
+    current = history[-1] if history else None
+    return {
+        "months": history,
+        "month_machines": costs.machine_names_by_month(history, now),
+        "current": current,
+        "spark": _spark([month.total for month in history]),
+        "hourly": costs.hourly_now(),
+        "running": costs.open_lives(),
+        "machines": costs.machine_costs_this_month(now),
+    }
+
+
 def _dashboard_context(request: Request, *, error: str | None = None, notice: str | None = None) -> dict:
     session_id = request.state.session_id
     status = session_status_context(session_id)
@@ -161,6 +227,7 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         notice = f"{notice} {machines_notice}" if notice else machines_notice
     now = datetime.now(timezone.utc)
     return {
+        "cost": _cost_summary(now),
         "machine_costs": {
             machine.name: pricing.month_to_date(machine.created_at, now, machine.rates)
             for machine in machines
@@ -177,6 +244,22 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         "vault_configured": config.VAULT_FILE.exists(),
         **status,
     }
+
+
+@app.get("/costs", response_class=HTMLResponse)
+async def costs_page(request: Request):
+    """Every month the ledger knows about, and what this one is made of.
+
+    Reads the ledger only: no API call, so the page answers the same way
+    with the session locked -- what it cost is not a secret, and the
+    machines it is about may not exist any more.
+    """
+    now = datetime.now(timezone.utc)
+    return templates.TemplateResponse(
+        request,
+        "costs.html",
+        {"cost": _cost_summary(now, months=24), "now": now},
+    )
 
 
 @app.get("/machines/table", response_class=HTMLResponse)

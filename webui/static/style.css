@@ -725,3 +725,30 @@ dl.kv dd { margin: 0; font-size: 13.5px; word-break: break-all; }
   font-family: ui-monospace, "JetBrains Mono", monospace;
 }
 .diff-row .now::before { content: "→ "; color: var(--text-faint); font-weight: 400; }
+
+/* ==========================================================================
+   Costs
+   ========================================================================== */
+
+/* The session badges keep their own column inside the sidebar foot, so the
+   machine count above them sits in the same rhythm. */
+.sidebar-status { display: flex; flex-direction: column; gap: 8px; }
+
+.spark { display: block; width: 100%; height: 62px; }
+.spark-axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-faint); }
+
+/* Magnitude by name: one hue, and a length. A machine that is gone keeps
+   its share of the month at a lighter step of the same hue. */
+.breakdown { display: flex; flex-direction: column; gap: 10px; }
+.breakdown-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 84px; gap: 12px; align-items: center; font-size: 13px; }
+.breakdown-row .name { font-size: 12.5px; }
+.breakdown-track { height: 10px; border-radius: 999px; background: var(--surface-sunk); overflow: hidden; }
+.breakdown-fill { display: block; height: 100%; border-radius: 999px; background: var(--c-accent); }
+.breakdown-fill.is-past { background: color-mix(in oklab, var(--c-accent) 40%, var(--ground)); }
+.breakdown-row .amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .swatch-running { background: var(--c-accent); }
+.legend .swatch-gone { background: color-mix(in oklab, var(--c-accent) 40%, var(--ground)); }

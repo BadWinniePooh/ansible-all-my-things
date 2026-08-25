@@ -26,6 +26,7 @@ whose timezone nobody set.
 from __future__ import annotations
 
 import sqlite3
+from calendar import month_name
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -171,3 +172,136 @@ def lives(*, database: Path | None = None) -> list[Life]:
 
 def open_lives(*, database: Path | None = None) -> list[Life]:
     return [life for life in lives(database=database) if life.is_open]
+
+
+@dataclass(frozen=True)
+class MonthCost:
+    """One calendar month's estimate. ``projected`` is only ever set on the
+    month that has not finished yet."""
+
+    year: int
+    month: int
+    total: float
+    projected: float | None = None
+
+    @property
+    def label(self) -> str:
+        return f"{month_name[self.month][:3]} {self.year}"
+
+    @property
+    def long_label(self) -> str:
+        return f"{month_name[self.month]} {self.year}"
+
+    @property
+    def is_current(self) -> bool:
+        return self.projected is not None
+
+
+def _window(life: Life, start: datetime, end: datetime, now: datetime) -> tuple[datetime, datetime]:
+    """The part of this month the machine was actually alive for, never
+    running past now -- a month is not billed before it happens."""
+    began = max(life.created_at, start)
+    ended = min(life.destroyed_at or now, end, now)
+    return began, ended
+
+
+def cost_in_month(life: Life, year: int, month: int, now: datetime) -> float:
+    """One machine's share of one month.
+
+    The cap is applied to this window rather than to the machine's whole
+    life, because that is how Hetzner charges: a server running since March
+    is capped again every month.
+    """
+    if life.created_at is None:
+        return 0.0
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    began, ended = _window(life, start, pricing.month_end(start), now)
+    if ended <= began:
+        return 0.0
+    return pricing.cost_between(began, ended, life.rates) or 0.0
+
+
+def _projected_in_month(life: Life, year: int, month: int, now: datetime) -> float:
+    """What this machine will have cost by month end if nothing changes --
+    which for a machine already destroyed is simply what it cost."""
+    if life.created_at is None:
+        return 0.0
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    end = pricing.month_end(start)
+    began = max(life.created_at, start)
+    ended = min(life.destroyed_at or end, end)
+    if ended <= began:
+        return 0.0
+    return pricing.cost_between(began, ended, life.rates) or 0.0
+
+
+def month_totals(now: datetime, *, months: int = 6, database: Path | None = None) -> list[MonthCost]:
+    """The last few months, oldest first, ending with the current one.
+
+    Months with no machines are included as a real zero rather than left
+    out: an empty month is an answer, and a chart with a gap in it invites
+    the reader to interpolate across a month that genuinely cost nothing.
+    """
+    recorded = lives(database=database)
+    current = pricing.month_start(now)
+    result: list[MonthCost] = []
+    for offset in range(months - 1, -1, -1):
+        year, month = _shift_month(current.year, current.month, -offset)
+        total = sum(cost_in_month(life, year, month, now) for life in recorded)
+        projected = None
+        if (year, month) == (current.year, current.month):
+            projected = sum(_projected_in_month(life, year, month, now) for life in recorded)
+        result.append(MonthCost(year=year, month=month, total=total, projected=projected))
+    return result
+
+
+def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    index = (year * 12 + (month - 1)) + delta
+    return index // 12, index % 12 + 1
+
+
+def machine_costs_this_month(
+    now: datetime, *, database: Path | None = None
+) -> list[tuple[Life, float]]:
+    """Every machine that cost anything this month, dearest first --
+    including the ones that no longer exist, which is the whole reason the
+    ledger is written."""
+    current = pricing.month_start(now)
+    costed = [
+        (life, cost_in_month(life, current.year, current.month, now))
+        for life in lives(database=database)
+    ]
+    return sorted(
+        [entry for entry in costed if entry[1] > 0], key=lambda entry: entry[1], reverse=True
+    )
+
+
+def machine_names_by_month(
+    history: list[MonthCost], now: datetime, *, database: Path | None = None
+) -> dict[str, list[str]]:
+    """Which machines each month's figure is made of, so a month in the
+    table can be read without opening the ledger."""
+    recorded = lives(database=database)
+    return {
+        month.label: sorted(
+            {
+                life.name
+                for life in recorded
+                if cost_in_month(life, month.year, month.month, now) > 0
+            }
+        )
+        for month in history
+    }
+
+
+def hourly_now(*, database: Path | None = None) -> float | None:
+    """What the machines still running are costing per hour, together.
+
+    None when nothing is running, which is different from €0.00 an hour --
+    and different again from a machine whose location the account did not
+    price, which contributes nothing and is named on the costs screen.
+    """
+    running = open_lives(database=database)
+    if not running:
+        return None
+    return sum(life.rates.hourly or 0.0 for life in running)

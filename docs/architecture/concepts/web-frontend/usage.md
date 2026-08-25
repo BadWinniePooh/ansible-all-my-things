@@ -194,6 +194,41 @@ the built-in lists, or the location is not orderable for the size. The page
 names each part that could not be honoured and what was selected instead,
 rather than reporting a clean load of a form that is now half something else.
 
+## What it costs
+
+Hetzner bills a server by the hour and stops charging once the hours reach the
+server type's monthly price, and `GET /servers` reports both rates for the
+location the machine actually runs in. So the cost of a running machine is
+arithmetic, not a guess: the machines table shows what each one has cost since
+the first of the month, beside when it was created, and refreshes itself every
+minute.
+
+**The dashboard card** carries two figures — spent so far this month, and a
+projection for month end that assumes nothing is created or destroyed — plus
+what the running machines cost per hour together, and a six-month sparkline.
+*All months* leads to the costs screen, which splits the current month per
+machine (including the ones already destroyed, shaded) and lists every month the
+ledger knows about.
+
+**Machines that no longer exist still count.** The account forgets a server the
+moment it is destroyed, but the invoice does not, so the interface keeps its own
+ledger: one row per life of a machine, opened the first time it is seen and
+closed when the account stops reporting it. Closing on absence rather than in
+the destroy route means a machine destroyed from the command line or the Hetzner
+console is counted too. A pool name handed out again next month is a second row,
+never a longer first one.
+
+**Every figure is an estimate of the server line and says so.** Not counted,
+because nothing here can see them: the primary IPv4 address, traffic over the
+included volume, snapshots, volumes and backups. The invoice will be a little
+higher, never lower.
+
+The ledger is a SQLite file in the volume
+(`inventories/.webui/costs.sqlite3`), so it survives restarts and image
+upgrades along with everything else you own, and is backed up by copying the
+same volume. The costs screen reads only that file, so it answers with the
+session locked — what a machine cost is not a secret.
+
 ## Runs
 
 The run screen names the machine the run is about, in the same badge the

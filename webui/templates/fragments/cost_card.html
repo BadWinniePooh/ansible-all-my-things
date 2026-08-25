@@ -1,0 +1,67 @@
+{#
+  The bill, at the size of the card beside it. Detail — every month, and
+  what this one is made of — is one click away on the costs screen rather
+  than on the dashboard, so the dashboard stays one screen.
+#}
+<section id="cost-card">
+  <h2>Hetzner costs</h2>
+  <div class="card-body">
+    {% if cost.current %}
+    <div class="pool-summary">
+      <span class="figure">
+        <span class="figure-value">{{ cost.current.total | euro }}</span>
+        <span class="figure-unit">this month so far</span>
+      </span>
+      <span class="pool-next">
+        Projected <span class="name">{{ cost.current.projected | euro }}</span>
+        by the end of {{ cost.current.long_label }}.
+      </span>
+    </div>
+
+    {#
+      One measure, so one hue and no legend: the line is the estimate, the
+      dot is where the month has got to.
+    #}
+    <svg class="spark" viewBox="0 0 300 62" preserveAspectRatio="none" role="img"
+         aria-label="Estimated cost per month, {{ cost.months[0].label }} to {{ cost.current.label }}">
+      <path d="{{ cost.spark.area }}" fill="var(--accent-wash)"></path>
+      <path d="{{ cost.spark.line }}" fill="none" stroke="var(--c-accent)" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+      <circle cx="{{ cost.spark.last_x }}" cy="{{ cost.spark.last_y }}" r="4"
+              fill="var(--c-accent)" stroke="var(--paper)" stroke-width="2"></circle>
+    </svg>
+    <div class="spark-axis">
+      <span>{{ cost.months[0].label }}</span>
+      <span>{{ cost.current.label }}</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="pool-summary">
+      <span class="figure">
+        <span class="figure-value">{{ cost.hourly | euro_rate }}</span>
+        <span class="figure-unit">running now</span>
+      </span>
+      <span class="pool-next">
+        {% if cost.running %}
+        {{ cost.running | map(attribute='server_type') | join(' + ') }}
+        in {{ cost.running | map(attribute='location') | unique | join(', ') }}.
+        {% else %}
+        Nothing is running, so nothing is accruing.
+        {% endif %}
+      </span>
+    </div>
+
+    <p class="card-note"><a href="/costs">All months, and what this one is made of.</a></p>
+    {% else %}
+    <p class="card-note">
+      Nothing recorded yet. Costs are read from your Hetzner account the first time the
+      dashboard sees a machine with the API token unlocked.
+    </p>
+    {% endif %}
+
+    <span class="helper">An estimate of the server line only: it excludes the primary IPv4
+      address, traffic over the included volume, snapshots, volumes and backups. The invoice
+      will be a little higher, never lower.</span>
+  </div>
+</section>

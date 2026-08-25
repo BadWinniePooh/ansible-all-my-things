@@ -58,6 +58,12 @@
         Create VM
         {% if not (token_unlocked and vault_unlocked) %}<span class="spacer"></span>{{ lock_icon }}{% endif %}
       </a>
+      <a href="/costs" {{ 'aria-current=page' | safe if active == 'costs' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3.5 15.5V9M8.5 15.5V4.5M13.5 15.5v-4M17 17.5H3"></path>
+        </svg>
+        Costs
+      </a>
       <a href="/run" class="{{ 'is-locked' if not (token_unlocked and vault_unlocked) }}" {{ 'aria-current=page' | safe if active == 'run' }}>
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="2.5" y="3.5" width="15" height="13" rx="2.5"></rect>
@@ -101,8 +107,19 @@
       </a>
     </nav>
 
-    <div class="sidebar-foot" id="session-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
-      {% include "fragments/session_status.html" %}
+    <div class="sidebar-foot">
+      {#
+        The machine count belongs beside the lock states rather than on the
+        dashboard alone: it is the same kind of fact about this
+        installation, and it is as true on the vault screen as on the
+        dashboard.
+      #}
+      <span class="status-badge {{ 'ok' if machine_count else 'cancelled' }}">
+        {{ machine_count }} machine{{ '' if machine_count == 1 else 's' }}
+      </span>
+      <div id="session-status" class="sidebar-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
+        {% include "fragments/session_status.html" %}
+      </div>
     </div>
   </aside>
 
