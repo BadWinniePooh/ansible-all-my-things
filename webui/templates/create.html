@@ -32,33 +32,26 @@
 
   <fieldset>
     <legend>Server size</legend>
-    {% for value, spec in server_types.items() %}
     <label>
-      <input type="radio" name="server_type" value="{{ value }}" {{ 'checked' if value == selected.server_type }}>
-      <strong>{{ value }}</strong> — {{ spec.vcpu }} vCPU, {{ spec.memory_gb }} GB RAM,
-      {{ spec.disk_gb }} GB disk, ~{{ spec.monthly_eur }} €/month
+      <input type="checkbox" name="server_types_live" value="1"
+        hx-get="/create/server-types" hx-trigger="change" hx-target="#server-types-table" hx-swap="outerHTML"
+        hx-include="closest form">
+      Show all sizes available from Hetzner (live lookup; requires an unlocked API token)
     </label>
-    {% endfor %}
+    {% include "fragments/server_types_table.html" %}
   </fieldset>
 
-  <fieldset>
-    <legend>Location</legend>
-    {% for value, city in locations.items() %}
-    <label>
-      <input type="radio" name="location" value="{{ value }}" {{ 'checked' if value == selected.location }}>
-      <strong>{{ value }}</strong> — {{ city }}
-    </label>
-    {% endfor %}
-  </fieldset>
+  {% include "fragments/location_fieldset.html" %}
 
   <fieldset>
     <legend>Operating system image</legend>
-    {% for image in images %}
     <label>
-      <input type="radio" name="image_select" value="{{ image.value }}" {{ 'checked' if image.value == selected.image }}>
-      {{ image.label }}{{ " (support ends " ~ image.support_end ~ ")" if image.support_end }}
+      <input type="checkbox" name="images_live" value="1"
+        hx-get="/create/images" hx-trigger="change" hx-target="#image-options" hx-swap="outerHTML"
+        hx-include="closest form">
+      Show full image catalogue from Hetzner (live lookup; requires an unlocked API token)
     </label>
-    {% endfor %}
+    {% include "fragments/image_options.html" %}
     <label>
       Other (free text)
       <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12">

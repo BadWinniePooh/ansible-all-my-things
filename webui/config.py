@@ -98,9 +98,9 @@ PROFILES = {
 # place the create form reads sizing detail from (FR-028). Update both
 # together if Hetzner's pricing changes.
 SERVER_TYPES = {
-    "cx23": {"vcpu": 2, "memory_gb": 4, "disk_gb": 40, "monthly_eur": 4.75},
-    "cx33": {"vcpu": 4, "memory_gb": 8, "disk_gb": 80, "monthly_eur": 7.72},
-    "cx43": {"vcpu": 8, "memory_gb": 16, "disk_gb": 160, "monthly_eur": 14.27},
+    "cx23": {"vcpu": 2, "memory_gb": 4, "disk_gb": 40, "monthly_eur": 6.53},
+    "cx33": {"vcpu": 4, "memory_gb": 8, "disk_gb": 80, "monthly_eur": 10.10},
+    "cx43": {"vcpu": 8, "memory_gb": 16, "disk_gb": 160, "monthly_eur": 19.03},
 }
 
 # Sourced from the comment table in inventories/group_vars/hcloud/vars.yml.
@@ -113,9 +113,12 @@ LOCATIONS = {
     "sin": "Singapore",
 }
 
-# spec.md Assumptions: "a short list of current Ubuntu long-term-support
-# images plus a free-text field, rather than a live catalogue lookup".
+# spec.md Assumptions: a short curated Ubuntu LTS list is the default,
+# shown before any live Hetzner lookup; a toggle on the create page
+# switches to the live catalogue for users who want more choice. The
+# first entry here is the page's default selection.
 UBUNTU_LTS_IMAGES = [
+    {"value": "ubuntu-26.04", "label": "Ubuntu 26.04 LTS", "support_end": "2031-04"},
     {"value": "ubuntu-24.04", "label": "Ubuntu 24.04 LTS", "support_end": "2029-04"},
     {"value": "ubuntu-22.04", "label": "Ubuntu 22.04 LTS", "support_end": "2027-04"},
 ]

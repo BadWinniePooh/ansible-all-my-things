@@ -332,11 +332,13 @@ async def sshkey_rotate(
     )
 
 
-def _default_selected() -> dict:
+def _default_selected(server_types: dict) -> dict:
     return {
         "profile": next(iter(config.PROFILES)),
-        "server_type": next(iter(config.SERVER_TYPES)),
-        "location": next(iter(config.LOCATIONS)),
+        "server_type": next(iter(server_types)),
+        # Left for _create_form_context to fill in once it knows which
+        # locations that server type actually offers.
+        "location": None,
         "image": config.UBUNTU_LTS_IMAGES[0]["value"],
         "image_custom": "",
     }
@@ -353,15 +355,16 @@ def _selected_from_preset(preset: presets.Preset) -> dict:
     }
 
 
-def _available_images(session_id: str, status: dict) -> tuple[list[dict], str | None]:
-    """Live catalogue from Hetzner when the token is unlocked, falling back
-    to the curated static list (config.UBUNTU_LTS_IMAGES) otherwise or on
-    any API failure -- the create page must still render and stay usable
-    even if the live lookup can't run."""
-    if not status["token_unlocked"]:
-        return config.UBUNTU_LTS_IMAGES, None
+def _static_server_types() -> dict[str, dict]:
+    return {
+        value: {**spec, "locations": list(config.LOCATIONS)} for value, spec in config.SERVER_TYPES.items()
+    }
 
-    token = secret_store.hcloud_token(session_id)
+
+def _fetch_live_images(token: str) -> tuple[list[dict], str | None]:
+    """Called only when the "show full catalogue" toggle is on (create.html)
+    -- the page's default is always the curated static list
+    (config.UBUNTU_LTS_IMAGES), never a background live lookup."""
     try:
         raw = hcloud_api.list_images(token)
     except hcloud_api.HetznerApiError as exc:
@@ -377,20 +380,104 @@ def _available_images(session_id: str, status: dict) -> tuple[list[dict], str | 
     return images, None
 
 
+def _fetch_live_server_types(token: str) -> tuple[dict[str, dict], str | None]:
+    """Called only when the "show all sizes" toggle is on (create.html) --
+    mirrors _fetch_live_images. Restricted to non-deprecated x86 types: this
+    UI's image list is x86-only, so an arm64 (cax) server type could never
+    actually boot one."""
+    try:
+        raw = hcloud_api.list_server_types(token)
+    except hcloud_api.HetznerApiError as exc:
+        return (
+            _static_server_types(),
+            f"Could not load server sizes from Hetzner ({exc}); showing built-in defaults.",
+        )
+
+    server_types: dict[str, dict] = {}
+    for server_type in raw:
+        if server_type.get("architecture") != "x86" or server_type.get("deprecation"):
+            continue
+        prices = server_type.get("prices") or []
+        locations = sorted({price["location"] for price in prices if price.get("location")})
+        if not locations:
+            continue
+        monthly_prices = [
+            float(price["price_monthly"]["gross"])
+            for price in prices
+            if price.get("price_monthly", {}).get("gross") is not None
+        ]
+        server_types[server_type["name"]] = {
+            "vcpu": server_type.get("cores"),
+            "memory_gb": server_type.get("memory"),
+            "disk_gb": server_type.get("disk"),
+            # Price can differ by location; the cheapest one is shown with
+            # "from" in the template rather than an exact per-location figure.
+            "monthly_eur": min(monthly_prices) if monthly_prices else None,
+            "locations": locations,
+        }
+
+    if not server_types:
+        return (
+            _static_server_types(),
+            "Hetzner returned no available x86 server types; showing built-in defaults.",
+        )
+    return server_types, None
+
+
+def _resolve_images(session_id: str, status: dict, *, live: bool) -> tuple[list[dict], str | None]:
+    if not live:
+        return config.UBUNTU_LTS_IMAGES, None
+    if not status["token_unlocked"]:
+        return (
+            config.UBUNTU_LTS_IMAGES,
+            "Unlock the Hetzner API token first to load the live catalogue; showing built-in defaults.",
+        )
+    return _fetch_live_images(secret_store.hcloud_token(session_id))
+
+
+def _resolve_server_types(session_id: str, status: dict, *, live: bool) -> tuple[dict[str, dict], str | None]:
+    if not live:
+        return _static_server_types(), None
+    if not status["token_unlocked"]:
+        return (
+            _static_server_types(),
+            "Unlock the Hetzner API token first to load live sizes; showing built-in defaults.",
+        )
+    return _fetch_live_server_types(secret_store.hcloud_token(session_id))
+
+
+def _locations_for_server_type(server_types: dict, server_type_value: str | None) -> dict[str, str]:
+    spec = server_types.get(server_type_value) if server_type_value else None
+    codes = spec["locations"] if spec else list(config.LOCATIONS)
+    return {code: config.LOCATIONS.get(code, code) for code in codes}
+
+
 def _create_form_context(
     status: dict, session_id: str, *, error: str | None = None, selected: dict | None = None
 ) -> dict:
-    images, images_notice = _available_images(session_id, status)
+    # Always the curated static lists on a fresh render (FR: "by default
+    # the hardcoded defaults should be shown") -- the live catalogue and
+    # live sizes are only ever fetched from the toggle-backed fragment
+    # routes below, on explicit user request.
+    images, _ = _resolve_images(session_id, status, live=False)
+    server_types, _ = _resolve_server_types(session_id, status, live=False)
+
+    selected = dict(selected) if selected else _default_selected(server_types)
+    if selected["server_type"] not in server_types:
+        selected["server_type"] = next(iter(server_types))
+    locations = _locations_for_server_type(server_types, selected["server_type"])
+    if selected.get("location") not in locations:
+        selected["location"] = next(iter(locations), None)
+
     return {
         **status,
         "error": error,
-        "notice": images_notice,
         "profiles": config.PROFILES,
-        "server_types": config.SERVER_TYPES,
-        "locations": config.LOCATIONS,
+        "server_types": server_types,
+        "locations": locations,
         "images": images,
         "presets": presets.list_presets(),
-        "selected": selected or _default_selected(),
+        "selected": selected,
     }
 
 
@@ -399,8 +486,88 @@ def _create_choices_from_form(form) -> dict:
         "profile": form.get("profile") or next(iter(config.PROFILES)),
         "server_type": form.get("server_type") or next(iter(config.SERVER_TYPES)),
         "location": form.get("location") or next(iter(config.LOCATIONS)),
-        "image": form.get("image_custom") or form.get("image_select") or "ubuntu-24.04",
+        "image": form.get("image_custom") or form.get("image_select") or config.UBUNTU_LTS_IMAGES[0]["value"],
     }
+
+
+@app.get("/create/locations", response_class=HTMLResponse)
+async def create_locations_fragment(
+    request: Request, server_type: str = "", location: str = "", server_types_live: str = ""
+):
+    """Backs the location fieldset's htmx refresh on server_type change
+    (create.html) -- a server type is only orderable in the locations its
+    own prices list names, so the two fieldsets can't be independent.
+    server_types_live must mirror whichever source (static/live) the
+    server-size table currently shows, or a live-only type's own name
+    would look "unknown" against the static list and get silently reset.
+    """
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    server_types, _ = _resolve_server_types(session_id, status, live=bool(server_types_live))
+    if server_type not in server_types:
+        server_type = next(iter(server_types), None)
+    locations = _locations_for_server_type(server_types, server_type)
+    if location not in locations:
+        location = next(iter(locations), None)
+    return templates.TemplateResponse(
+        request,
+        "fragments/location_fieldset.html",
+        {"locations": locations, "selected": {"location": location}},
+    )
+
+
+@app.get("/create/server-types", response_class=HTMLResponse)
+async def create_server_types_fragment(
+    request: Request, server_types_live: str = "", server_type: str = "", location: str = ""
+):
+    """Backs the "show all sizes" toggle (create.html). Swaps the size table
+    and, out-of-band, the location fieldset in the same response -- toggling
+    sources can change which server type ends up selected, which must carry
+    a fresh, correctly-scoped location list with it rather than leaving the
+    old fieldset showing locations for a size that's no longer selected."""
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    server_types, notice = _resolve_server_types(session_id, status, live=bool(server_types_live))
+
+    if server_type not in server_types:
+        server_type = next(iter(server_types))
+    locations = _locations_for_server_type(server_types, server_type)
+    if location not in locations:
+        location = next(iter(locations), None)
+
+    table_html = templates.get_template("fragments/server_types_table.html").render(
+        request=request,
+        server_types=server_types,
+        selected={"server_type": server_type},
+        notice=notice,
+    )
+    location_html = templates.get_template("fragments/location_fieldset.html").render(
+        request=request,
+        locations=locations,
+        selected={"location": location},
+        oob=True,
+    )
+    return HTMLResponse(table_html + location_html)
+
+
+@app.get("/create/images", response_class=HTMLResponse)
+async def create_images_fragment(request: Request, images_live: str = "", image: str = ""):
+    """Backs the "show full catalogue" toggle (create.html). Only the
+    curated-options list is swapped, not the free-text "Other" input next
+    to it, so anything the user already typed there survives the toggle."""
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    images, notice = _resolve_images(session_id, status, live=bool(images_live))
+
+    known = {entry["value"] for entry in images}
+    if image not in known:
+        image = images[0]["value"] if images else None
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/image_options.html",
+        {"images": images, "selected": {"image": image}, "notice": notice},
+    )
 
 
 @app.get("/create", response_class=HTMLResponse)

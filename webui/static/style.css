@@ -69,6 +69,19 @@ th, td {
   border-bottom: 1px solid var(--border);
 }
 
+table[data-sortable] th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+table[data-sortable] th[data-sort-dir="asc"]::after {
+  content: " \25B2";
+}
+
+table[data-sortable] th[data-sort-dir="desc"]::after {
+  content: " \25BC";
+}
+
 form label {
   display: block;
   margin-bottom: 0.5rem;

@@ -1,0 +1,36 @@
+<div id="server-types-table">
+  {% if notice %}
+  <p class="banner banner-notice">{{ notice }}</p>
+  {% endif %}
+  <table class="sortable-table" data-sortable>
+    <thead>
+      <tr>
+        <th></th>
+        <th data-sort="text">Size</th>
+        <th data-sort="number">vCPUs</th>
+        <th data-sort="number">RAM (GB)</th>
+        <th data-sort="number">Disk (GB)</th>
+        <th data-sort="number">From (€/month)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for value, spec in server_types.items() %}
+      <tr>
+        <td>
+          <input type="radio" name="server_type" value="{{ value }}" {{ 'checked' if value == selected.server_type }}
+            hx-get="/create/locations" hx-trigger="change" hx-target="#location-fieldset" hx-swap="outerHTML"
+            hx-include="closest form">
+        </td>
+        <td>{{ value }}</td>
+        <td>{{ spec.vcpu }}</td>
+        <td>{{ spec.memory_gb }}</td>
+        <td>{{ spec.disk_gb }}</td>
+        <td>{{ spec.monthly_eur }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not server_types %}
+  <p><small>No server sizes available.</small></p>
+  {% endif %}
+</div>

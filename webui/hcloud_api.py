@@ -72,10 +72,9 @@ def validate_token(token: str) -> None:
 
 
 def list_images(token: str) -> list[dict]:
-    """OS images available for the account, restricted to the x86 system
-    images the configured server types (cx23/cx33/cx43, all shared-vCPU
-    x86) can actually boot -- not snapshots, apps, backups, or deprecated
-    images."""
+    """OS images available for the account, restricted to x86 system images
+    (this UI only offers x86 server types below) -- not snapshots, apps,
+    backups, or deprecated images."""
     response = httpx.get(
         f"{API_BASE}/images",
         headers=_headers(token),
@@ -89,3 +88,20 @@ def list_images(token: str) -> list[dict]:
     )
     _raise_for_status(response)
     return response.json().get("images", [])
+
+
+def list_server_types(token: str) -> list[dict]:
+    """Server types (sizes) available for the account. /server_types has no
+    architecture or deprecation filter params (unlike /images), so both are
+    applied client-side by the caller. Each entry's `prices` array names
+    the locations that type can actually be ordered in -- there is no
+    separate per-type "locations" field -- which is also this UI's only
+    source for which locations are selectable for a given server type."""
+    response = httpx.get(
+        f"{API_BASE}/server_types",
+        headers=_headers(token),
+        params={"sort": "name:asc"},
+        timeout=_TIMEOUT,
+    )
+    _raise_for_status(response)
+    return response.json().get("server_types", [])
