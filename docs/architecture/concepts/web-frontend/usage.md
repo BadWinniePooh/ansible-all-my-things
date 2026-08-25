@@ -125,6 +125,49 @@ failing minutes later with a name already taken from the pool.
 *Preview command* renders the exact `ansible-playbook` invocation the current
 choices produce, without running anything.
 
+## Presets
+
+A preset is a saved set of create-form choices. The selector at the top of the
+create screen loads one; it is not rendered at all until at least one preset
+exists, since it would otherwise offer only *Custom*, which is what the form
+already is.
+
+**The selector names what the form currently is.** Editing any choice moves it
+to *Custom*, because the form no longer describes the preset that was loaded.
+Arriving at a saved preset's choices by hand moves it back to that preset —
+matching is on the choices, not on which preset was clicked.
+
+**Choices that are already saved cannot be saved again.** When the form
+matches a preset, the save box says which one holds them and refuses input:
+saving would either fail on the taken name or leave two presets saying the
+same thing.
+
+**A preset records which catalogue it was made from.** A size or an image that
+only exists in the live Hetzner catalogue is not in the built-in lists, so a
+preset saved with *Show all sizes* or *Show full image catalogue* on records
+that, and loading it turns the same toggles back on and re-runs the lookups.
+Without this the form would match those choices against the built-in lists,
+find them unknown, and quietly provision something else.
+
+**A partial restore says which part failed.** The image can restore while the
+size cannot — the account no longer offers it, the live lookup fell back to
+the built-in lists, or the location is not orderable for the size. The page
+names each part that could not be honoured and what was selected instead,
+rather than reporting a clean load of a form that is now half something else.
+
+## Runs
+
+The run screen names the machine the run is about and keeps a spinner beside
+it while it is going: *Provisioning osgiliath…*, *Configuring edoras…*. A
+provision run knows the name because `create-vm.yml` claims the first free
+name in the pool, which is the same rule the interface applies to decide what
+to display.
+
+When a run ends, the screen says what happened to that machine —
+*Provisioned osgiliath*, or *Provisioning osgiliath failed (exit 2)* with a
+line on what the automation did about it. A cancelled run is reported as
+cancelled, not as a failure.
+
 ## What the interface does not support
 
 Matching the feature's scope

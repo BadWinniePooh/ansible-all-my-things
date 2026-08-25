@@ -79,7 +79,11 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  /* The shell owns the window: the sidebar stays put and the content
+     column scrolls on its own. Below the breakpoint at the end of this
+     file the two stack and the document scrolls as one again. */
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   background: var(--surface-sunk);
   color: var(--text);
@@ -109,6 +113,9 @@ code, .mono { font-size: 0.92em; }
 .sidebar {
   width: 236px;
   flex: none;
+  height: 100%;
+  /* Only when the window is shorter than the sidebar's own content. */
+  overflow-y: auto;
   background: var(--paper);
   border-right: 1px solid var(--border);
   padding: 22px 16px;
@@ -160,7 +167,7 @@ code, .mono { font-size: 0.92em; }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 .sidebar-foot form { display: contents; }
 
-.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.content { flex: 1; min-width: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; }
 
 .topbar {
   display: flex;
@@ -171,6 +178,9 @@ code, .mono { font-size: 0.92em; }
   padding: 12px 28px;
   background: var(--paper);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .topbar h1 { font-size: 18px; }
 
@@ -519,7 +529,24 @@ pre.run-output {
   margin: 0;
 }
 
-.run-state { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.run-state { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; }
+.run-ok { color: var(--c-positive); }
+.run-failed { color: var(--c-critical); }
+.run-cancelled { color: var(--text-muted); }
+
+.spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 2px solid var(--accent-line);
+  border-top-color: var(--c-accent);
+  animation: spin 0.9s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 3s; }
+}
 
 /* ==========================================================================
    Key/value facts, danger panel, repeater
@@ -613,8 +640,16 @@ dl.kv dd { margin: 0; font-size: 13.5px; word-break: break-all; }
    ========================================================================== */
 
 @media (max-width: 900px) {
-  body { flex-direction: column; }
-  .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  body { flex-direction: column; height: auto; overflow: visible; }
+  .sidebar {
+    width: auto;
+    height: auto;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .content { height: auto; overflow: visible; }
+  .topbar { position: static; }
   .columns, .form-grid { grid-template-columns: minmax(0, 1fr); }
   .repeater fieldset { grid-template-columns: minmax(0, 1fr); }
   main, .locked-main { padding-left: 18px; padding-right: 18px; }

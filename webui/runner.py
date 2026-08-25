@@ -96,6 +96,62 @@ class Run:
                 pass
 
 
+_ACTION_VERBS: dict[Action, tuple[str, str]] = {
+    # action -> (present participle, past participle)
+    "provision": ("Provisioning", "Provisioned"),
+    "configure": ("Configuring", "Configured"),
+    "destroy": ("Destroying", "Destroyed"),
+}
+
+_FAILURE_DETAIL: dict[Action, str] = {
+    "provision": (
+        "The automation removes a machine it half-created and prints how to re-run. "
+        "The end of the output above says what went wrong."
+    ),
+    "configure": "The machine is left as the run found it. The end of the output above says what went wrong.",
+    "destroy": (
+        "The machine may still exist. Check it on the dashboard before running destroy again. "
+        "The end of the output above says what went wrong."
+    ),
+}
+
+
+def describe(run: "Run") -> dict[str, str | None]:
+    """The one place a run's state is put into words.
+
+    The run view renders this, and the SSE terminal event carries it
+    already rendered, so the browser never re-implements the wording and
+    the two can't drift apart.
+    """
+    present, past = _ACTION_VERBS[run.action]
+    target = run.target or "a machine"
+    exit_code = "" if run.exit_code is None else f" (exit {run.exit_code})"
+
+    if run.outcome == "running":
+        return {
+            "label": f"{present} {target}…",
+            "detail": None,
+            "tone": "running",
+        }
+    if run.outcome == "succeeded":
+        return {
+            "label": f"{past} {target}",
+            "detail": f"Finished cleanly{exit_code}.",
+            "tone": "ok",
+        }
+    if run.outcome == "cancelled":
+        return {
+            "label": f"{present} {target} — cancelled",
+            "detail": "Stopped on your request. Anything already created is left as it is.",
+            "tone": "cancelled",
+        }
+    return {
+        "label": f"{present} {target} failed{exit_code}",
+        "detail": _FAILURE_DETAIL[run.action],
+        "tone": "failed",
+    }
+
+
 def build_provision_command(
     *, profile: str, server_type: str, location: str, image: str
 ) -> list[str]:

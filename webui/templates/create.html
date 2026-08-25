@@ -3,17 +3,35 @@
 {% block title %}Create VM — Steward{% endblock %}
 {% block heading %}Create VM{% endblock %}
 {% block topbar %}
+  {#
+    Hidden entirely when nothing is saved: an empty selector would only
+    ever offer "Custom", which is what the form already is.
+  #}
   {% if presets %}
-  <div class="row-actions">
-    <span class="helper">Load a preset</span>
-    {% for preset in presets %}
-    <a class="btn btn-sm" href="/create?preset={{ preset.name }}">{{ preset.name }}</a>
-    {% endfor %}
-    <a class="helper" href="/presets">all presets</a>
-  </div>
+  {#
+    The selector names the preset the form currently *is*, which is the
+    one that was loaded, or -- for choices arrived at by hand -- whichever
+    preset already holds them. Anything else is Custom.
+  #}
+  {% set current_preset = selected_preset or matching_preset %}
+  <form id="preset-picker" class="row-actions" method="get" action="/create">
+    <label class="toggle-row" for="preset-select">Preset</label>
+    <select id="preset-select" name="preset">
+      <option value="" {{ 'selected' if not current_preset }}>Custom</option>
+      {% for preset in presets %}
+      <option value="{{ preset.name }}" {{ 'selected' if preset.name == current_preset }}>{{ preset.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-sm" type="submit">Load</button>
+    <a class="helper" href="/presets">Manage</a>
+  </form>
   {% endif %}
 {% endblock %}
 {% block content %}
+
+{# Read by static/preset-selection.js to keep the selector and the save box
+   honest after every edit, without a round trip. #}
+<script type="application/json" id="preset-data">{{ presets_json | safe }}</script>
 
 {% if not (token_unlocked and vault_unlocked) %}
 <p class="banner banner-error">
@@ -45,7 +63,7 @@
     <h2>Server size</h2>
     <div class="card-body">
       <label class="toggle-row">
-        <input type="checkbox" name="server_types_live" value="1"
+        <input type="checkbox" name="server_types_live" value="1" {{ 'checked' if selected.server_types_live }}
           hx-get="/create/server-types" hx-trigger="change" hx-target="#server-types-table" hx-swap="outerHTML"
           hx-include="closest form">
         Show all sizes available from Hetzner (live lookup; requires an unlocked API token)
@@ -65,7 +83,7 @@
     <h2>Operating system image</h2>
     <div class="card-body">
       <label class="toggle-row">
-        <input type="checkbox" name="images_live" value="1"
+        <input type="checkbox" name="images_live" value="1" {{ 'checked' if selected.images_live }}
           hx-get="/create/images" hx-trigger="change" hx-target="#image-options" hx-swap="outerHTML"
           hx-include="closest form">
         Show full image catalogue from Hetzner (live lookup; requires an unlocked API token)
@@ -105,12 +123,25 @@
 
 </form>
 
-<section>
+<section id="save-preset">
   <h2>Save these choices as a preset</h2>
   <div class="card-body">
+    {#
+      Saving what is already saved either fails on the taken name or makes
+      a second preset that says the same thing, so it is refused here and
+      the box names the preset that already holds these choices.
+      preset-selection.js keeps this state right as the form is edited.
+    #}
+    <p id="preset-save-note" class="card-note" {{ 'hidden' | safe if not matching_preset }}>
+      These choices are already saved as
+      <strong id="preset-save-match">{{ matching_preset or '' }}</strong>.
+    </p>
     <form method="post" action="/presets" class="form-actions">
-      <input type="text" name="name" placeholder="preset name" required>
-      <button type="button" hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML">
+      <input id="preset-save-name" type="text" name="name" placeholder="preset name" required
+        {{ 'disabled' if matching_preset }}>
+      <button id="preset-save-button" type="button"
+        hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML"
+        {{ 'disabled' if matching_preset }}>
         Save preset
       </button>
     </form>

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -26,6 +27,7 @@ from .runner import (
     build_destroy_command,
     build_provision_command,
 )
+from .runner import describe as describe_run  # runner owns the wording for a run's state
 from .secrets import SecretsUnavailable, SecretStore
 
 SESSION_COOKIE_NAME = "webui_session"
@@ -359,18 +361,58 @@ def _default_selected(server_types: dict) -> dict:
         "location": None,
         "image": config.UBUNTU_LTS_IMAGES[0]["value"],
         "image_custom": "",
+        "server_types_live": False,
+        "images_live": False,
     }
 
 
-def _selected_from_preset(preset: presets.Preset) -> dict:
-    known_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
+def _selected_from_preset(preset: presets.Preset, images: list[dict]) -> dict:
+    """A preset's choices in the shape the create template expects.
+
+    ``images`` is the catalogue the form is about to be rendered against
+    -- the live one when the preset was saved with the full catalogue
+    showing. An image in that list is a list selection; anything else goes
+    into the free-text field, which is the only place it could be shown.
+    """
+    known_images = {image["value"] for image in images}
     return {
         "profile": preset.profile,
         "server_type": preset.server_type,
         "location": preset.location,
         "image": preset.image if preset.image in known_images else None,
         "image_custom": "" if preset.image in known_images else preset.image,
+        "server_types_live": preset.server_types_live,
+        "images_live": preset.images_live,
     }
+
+
+def _resolved_image(selected: dict) -> str:
+    """The image a submission would actually provision: free text wins over
+    the list, matching _create_choices_from_form."""
+    return (selected.get("image_custom") or "").strip() or (selected.get("image") or "")
+
+
+def _matching_preset(selected: dict, all_presets: list[presets.Preset]) -> str | None:
+    """The preset the current choices already are, if any.
+
+    Saving is refused for a name that is taken, so offering to save
+    choices that are already stored under some name only leads to a
+    rejection or to a second preset saying the same thing. Matching on the
+    choices rather than on "which preset was loaded" also catches the user
+    who arrived at an existing preset by hand.
+    """
+    image = _resolved_image(selected)
+    for preset in all_presets:
+        if (
+            preset.profile == selected.get("profile")
+            and preset.server_type == selected.get("server_type")
+            and preset.location == selected.get("location")
+            and preset.image == image
+            and preset.server_types_live == bool(selected.get("server_types_live"))
+            and preset.images_live == bool(selected.get("images_live"))
+        ):
+            return preset.name
+    return None
 
 
 def _static_server_types() -> dict[str, dict]:
@@ -471,22 +513,72 @@ def _locations_for_server_type(server_types: dict, server_type_value: str | None
 
 
 def _create_form_context(
-    status: dict, session_id: str, *, error: str | None = None, selected: dict | None = None
+    status: dict,
+    session_id: str,
+    *,
+    error: str | None = None,
+    selected: dict | None = None,
+    restoring: str | None = None,
 ) -> dict:
-    # Always the curated static lists on a fresh render (FR: "by default
-    # the hardcoded defaults should be shown") -- the live catalogue and
-    # live sizes are only ever fetched from the toggle-backed fragment
-    # routes below, on explicit user request.
-    images, _ = _resolve_images(session_id, status, live=False)
-    server_types, _ = _resolve_server_types(session_id, status, live=False)
+    # The curated static lists on a fresh render (FR: "by default the
+    # hardcoded defaults should be shown"). A live catalogue is fetched
+    # here only when the selection being rendered was made against one --
+    # a preset saved with a toggle on, or a rejected submission carrying
+    # its toggles back -- otherwise only from the fragment routes below,
+    # on explicit user request.
+    images_live = bool((selected or {}).get("images_live"))
+    server_types_live = bool((selected or {}).get("server_types_live"))
+    images, images_notice = _resolve_images(session_id, status, live=images_live)
+    server_types, server_types_notice = _resolve_server_types(
+        session_id, status, live=server_types_live
+    )
 
     selected = dict(selected) if selected else _default_selected(server_types)
+
+    # A choice that is not in the catalogue this render offers cannot be
+    # shown as selected, so it is replaced. Silent while the user is
+    # driving the form; named, part by part, while restoring a preset --
+    # the size can fail to restore while the image succeeds, and "it
+    # loaded" would then be a lie about half the form (Principle XII).
+    gaps: list[str] = []
+    if server_types_notice:
+        gaps.append(server_types_notice)
+    if images_notice:
+        gaps.append(images_notice)
+
     if selected["server_type"] not in server_types:
+        wanted = selected["server_type"]
         selected["server_type"] = next(iter(server_types))
+        if wanted:
+            gaps.append(
+                f"Server size '{wanted}' is not in the catalogue shown here, "
+                f"so '{selected['server_type']}' is selected instead."
+            )
+
     locations = _locations_for_server_type(server_types, selected["server_type"])
     if selected.get("location") not in locations:
+        wanted = selected.get("location")
         selected["location"] = next(iter(locations), None)
+        if wanted:
+            gaps.append(
+                f"Location '{wanted}' cannot be ordered for server size "
+                f"'{selected['server_type']}', so '{selected['location']}' is selected instead."
+            )
 
+    known_images = {image["value"] for image in images}
+    if selected.get("image") and selected["image"] not in known_images:
+        wanted = selected["image"]
+        selected["image"] = images[0]["value"] if images else None
+        gaps.append(
+            f"Image '{wanted}' is not in the image list shown here, "
+            f"so '{selected['image']}' is selected instead."
+        )
+
+    if restoring and gaps:
+        restore_error = f"Preset '{restoring}' was not restored in full. " + " ".join(gaps)
+        error = f"{error} {restore_error}" if error else restore_error
+
+    all_presets = presets.list_presets()
     return {
         **status,
         "error": error,
@@ -494,8 +586,15 @@ def _create_form_context(
         "server_types": server_types,
         "locations": locations,
         "images": images,
-        "presets": presets.list_presets(),
+        "presets": all_presets,
+        # The same list the matching above walks, for the browser to walk
+        # after every edit without a round trip (static/preset-selection.js).
+        "presets_json": json.dumps([asdict(preset) for preset in all_presets]),
         "selected": selected,
+        "selected_preset": restoring,
+        # Both the initial render and preset-selection.js compute this;
+        # the server's answer is what a scripting-off browser gets.
+        "matching_preset": _matching_preset(selected, all_presets),
         # A preset can carry a free-text image, and a rejected submission
         # carries back whatever was typed, so the check runs on render too
         # rather than waiting for the field to be touched. An empty field
@@ -526,7 +625,11 @@ def _selected_from_form(form) -> dict:
     """The submitted choices in the shape the create template expects, so a
     rejected submission is redisplayed with what the user picked rather
     than reset to defaults."""
-    known_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
+    images_live = bool(form.get("images_live"))
+    # With the full catalogue showing, any name the radios offered is a
+    # valid list selection; against the built-in list, only its own names
+    # are, so a stale one is dropped rather than redisplayed as selected.
+    known_images = None if images_live else {image["value"] for image in config.UBUNTU_LTS_IMAGES}
     image_select = (form.get("image_select") or "").strip()
     image_custom = (form.get("image_custom") or "").strip()
     return {
@@ -536,8 +639,15 @@ def _selected_from_form(form) -> dict:
         # Free text overrides the list when both arrive (a submission made
         # with scripting off), so the redisplayed list shows nothing
         # selected rather than an option that would be ignored.
-        "image": None if image_custom else (image_select if image_select in known_images else None),
+        "image": None
+        if image_custom
+        else (image_select if (known_images is None or image_select in known_images) else None),
         "image_custom": image_custom,
+        # Which catalogue the submission was made against, so a redisplay
+        # (and a preset saved from it) matches its choices against the same
+        # lists the user was looking at.
+        "server_types_live": bool(form.get("server_types_live")),
+        "images_live": bool(form.get("images_live")),
     }
 
 
@@ -757,12 +867,23 @@ async def create_form(request: Request, preset: str | None = None):
     status = session_status_context(session_id)
     selected = None
     error = None
+    restoring = None
     if preset:
         try:
-            selected = _selected_from_preset(presets.get(preset))
+            saved = presets.get(preset)
         except presets.PresetNotFound:
             error = f"No preset named '{preset}'."
-    context = _create_form_context(status, session_id, error=error, selected=selected)
+        else:
+            # Resolved against the catalogue the preset was saved with, so
+            # a live-only size or image is matched against the list that
+            # actually contains it. _create_form_context reports whichever
+            # parts of the restore could not be honoured.
+            images, _ = _resolve_images(session_id, status, live=saved.images_live)
+            selected = _selected_from_preset(saved, images)
+            restoring = preset
+    context = _create_form_context(
+        status, session_id, error=error, selected=selected, restoring=restoring
+    )
     return templates.TemplateResponse(request, "create.html", context)
 
 
@@ -799,8 +920,11 @@ async def create_start(request: Request):
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
     # FR-045: refuse before any provider call -- create-vm.yml claims a
-    # name from the pool before it ever contacts Hetzner.
-    if pool.next_free_name() is None:
+    # name from the pool before it ever contacts Hetzner. The same first-free
+    # rule decides the name here, so it is also the name this run is about,
+    # and the run view can say which machine it is provisioning.
+    claimed_name = pool.next_free_name()
+    if claimed_name is None:
         context = _create_form_context(
             status,
             session_id,
@@ -841,7 +965,9 @@ async def create_start(request: Request):
     command = build_provision_command(**choices)
 
     try:
-        await runner.start(session_id=session_id, action="provision", target=None, command=command)
+        await runner.start(
+            session_id=session_id, action="provision", target=claimed_name, command=command
+        )
     except RunAlreadyActive as exc:
         context = _create_form_context(
             status, session_id, error=f"A {exc.active.action} run is already active. Wait for it to finish."
@@ -859,14 +985,14 @@ async def run_view(request: Request):
     status = session_status_context(request.state.session_id)
     run = runner.active
     if run is None:
-        context = {**status, "command": None, "output": [], "outcome": None, "exit_code": None}
+        context = {**status, "command": None, "output": [], "outcome": None, "state": None}
     else:
         context = {
             **status,
             "command": run.command,
             "output": list(run.output),
             "outcome": run.outcome,
-            "exit_code": run.exit_code,
+            "state": describe_run(run),
         }
     return templates.TemplateResponse(request, "run.html", context)
 
@@ -885,10 +1011,11 @@ async def run_stream(request: Request):
             return
         async for line in run.stream_lines():
             yield f"data: {line}\n\n"
-        yield (
-            "event: terminal\n"
-            f"data: {json.dumps({'outcome': run.outcome, 'exit_code': run.exit_code})}\n\n"
-        )
+        # The terminal event carries the state already put into words:
+        # runner.describe is the only place that wording lives, so the
+        # browser renders what the server would have rendered.
+        terminal = {"outcome": run.outcome, "exit_code": run.exit_code, **describe_run(run)}
+        yield f"event: terminal\ndata: {json.dumps(terminal)}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
 
@@ -1032,7 +1159,23 @@ async def presets_save(request: Request):
         message = html.escape(_with_catalogue_notice(exc.message, notice))
         return HTMLResponse(f'<p class="banner banner-error">{message}</p>', status_code=400)
 
-    preset = presets.Preset(name=name, **choices)
+    # Saved with the catalogue the choices were made against: a size or
+    # image that only exists in the live catalogue is unrestorable without
+    # it (presets.Preset).
+    preset = presets.Preset(
+        name=name,
+        **choices,
+        server_types_live=bool(form.get("server_types_live")),
+        images_live=bool(form.get("images_live")),
+    )
+
+    already = _matching_preset(_selected_from_form(form), presets.list_presets())
+    if already and already != name:
+        return HTMLResponse(
+            '<p class="banner banner-notice">These choices are already saved as '
+            f"&#39;{html.escape(already)}&#39;.</p>",
+            status_code=409,
+        )
 
     try:
         presets.save(preset)

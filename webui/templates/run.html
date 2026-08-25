@@ -3,9 +3,10 @@
 {% block title %}Run — Steward{% endblock %}
 {% block heading %}Run{% endblock %}
 {% block topbar %}
-  {% if command %}
-  <span id="run-outcome" class="run-state">
-    {% if outcome == 'running' %}running…{% else %}{{ outcome }}{% if exit_code is not none %} (exit {{ exit_code }}){% endif %}{% endif %}
+  {% if state %}
+  <span id="run-state" class="run-state run-{{ state.tone }}">
+    {% if state.tone == 'running' %}<span class="spinner" aria-hidden="true"></span>{% endif %}
+    <span id="run-label">{{ state.label }}</span>
   </span>
   {% endif %}
 {% endblock %}
@@ -41,6 +42,7 @@
 {# When running, the script below fills this in via SSE, which replays the
    ring buffer before switching to live lines -- pre-rendering here too
    would duplicate every already-buffered line. #}
+    <p id="run-detail" class="card-note">{{ state.detail or '' }}</p>
     <span class="helper">Output is streamed and held in memory only: it can echo decrypted
       configuration values, so it is never written to disk.</span>
   </div>
@@ -50,19 +52,26 @@
 <script>
 (function () {
   var outputEl = document.getElementById('run-output');
-  var outcomeEl = document.getElementById('run-outcome');
+  var stateEl = document.getElementById('run-state');
+  var labelEl = document.getElementById('run-label');
+  var detailEl = document.getElementById('run-detail');
   var source = new EventSource('/run/stream');
   source.onmessage = function (event) {
     outputEl.textContent += event.data + "\n";
     outputEl.scrollTop = outputEl.scrollHeight;
   };
   source.addEventListener('terminal', function (event) {
+    // The label and detail arrive rendered: webui/runner.py describe() is
+    // the only place a run's state is put into words, so there is nothing
+    // to re-implement here.
     var data = JSON.parse(event.data);
-    var text = data.outcome;
-    if (data.exit_code !== null && data.exit_code !== undefined) {
-      text += ' (exit ' + data.exit_code + ')';
-    }
-    outcomeEl.textContent = text;
+    if (data.label) labelEl.textContent = data.label;
+    detailEl.textContent = data.detail || '';
+    stateEl.className = 'run-state run-' + (data.tone || 'failed');
+    var spinner = stateEl.querySelector('.spinner');
+    if (spinner) spinner.remove();
+    var cancel = document.querySelector('form[action="/run/cancel"]');
+    if (cancel) cancel.remove();
     source.close();
   });
 })();

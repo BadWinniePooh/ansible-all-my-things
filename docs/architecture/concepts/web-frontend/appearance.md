@@ -55,8 +55,14 @@ one is wanted later, it is the same five lines again under a
 A fixed sidebar carries the brand, navigation and the session lock state; the
 content column carries a title bar and the page. Both live in
 [webui/templates/base.html](../../../../webui/templates/base.html), which every
-page extends by setting `active` to its nav key. Below 900px the sidebar
-becomes a header strip and the two-column pages collapse to one column.
+page extends by setting `active` to its nav key.
+
+The shell owns the window rather than the document: the sidebar is the window's
+height and stays put while the content column scrolls under its own sticky
+title bar. The sidebar itself only gains a scrollbar when the window is shorter
+than the sidebar's own content. Below 900px the two stack, the sidebar becomes
+a header strip, the two-column pages collapse to one column, and the document
+scrolls as one again.
 
 Icons are inline SVG in the templates, stroked on a 20px grid — no icon font,
 no emoji, and nothing fetched from a third-party host, matching the same
