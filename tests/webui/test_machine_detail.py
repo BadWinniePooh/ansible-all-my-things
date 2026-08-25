@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from webui import hcloud_api, inventory, pool, seed
+from webui import config, hcloud_api, inventory, pool, seed
 from webui.app import SESSION_COOKIE_NAME, app, secret_store
 
 TOKEN = "test-token"
@@ -22,11 +22,20 @@ LOCAL_ONLY = inventory.Machine(
     name="edoras", address=None, profile="desktop", server_type=None, location=None
 )
 
+PRICES = [
+    {
+        "location": "nbg1",
+        "price_hourly": {"gross": "0.0124000000000000"},
+        "price_monthly": {"gross": "10.1000000000000000"},
+    }
+]
+
 SERVERS = [
     {
         "name": "edoras",
         "status": "running",
-        "server_type": {"name": "cx33"},
+        "created": "2026-08-24T09:00:00Z",
+        "server_type": {"name": "cx33", "prices": PRICES},
         "datacenter": {"location": {"name": "nbg1"}},
         "public_net": {"ipv4": {"ip": "49.12.113.84"}},
     },
@@ -41,7 +50,12 @@ SERVERS = [
 
 
 @pytest.fixture(autouse=True)
-def volume_state(monkeypatch):
+def volume_state(monkeypatch, tmp_path):
+    # The ledger is written on every dashboard render, so it needs a path
+    # inside the test's own directory -- config's default is the container's
+    # volume, which on a developer machine is a directory at the filesystem
+    # root that no test has any business creating.
+    monkeypatch.setattr(config, "COST_DB_FILE", tmp_path / "costs.sqlite3")
     monkeypatch.setattr(
         pool,
         "status",
@@ -205,8 +219,16 @@ REAL_RESPONSE = {
         "cores": 2,
         "disk": 40,
         "memory": 4,
+        "prices": [
+            {
+                "location": "hel1",
+                "price_hourly": {"gross": "0.0104720000000000", "net": "0.0088000000"},
+                "price_monthly": {"gross": "6.5331000000000000", "net": "5.4900000000"},
+            }
+        ],
         "locations": [{"id": 1, "name": "fsn1"}, {"id": 3, "name": "hel1"}],
     },
+    "created": "2026-08-25T11:20:52Z",
     "location": {
         "id": 3,
         "name": "hel1",

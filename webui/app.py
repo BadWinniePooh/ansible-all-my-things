@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -18,7 +19,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, hcloud_api, inventory, messages, pool, presets, seed, sshkeys, vault
+from . import (
+    config,
+    costs,
+    hcloud_api,
+    inventory,
+    messages,
+    pool,
+    presets,
+    pricing,
+    seed,
+    sshkeys,
+    vault,
+)
 from .runner import (
     RunAlreadyActive,
     Runner,
@@ -53,6 +66,17 @@ def _shell_context(request: Request) -> dict:
 
 
 templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_shell_context])
+
+
+def _euro(amount: float | None) -> str:
+    """A money figure, or "unknown" when there is nothing to compute one
+    from -- never €0.00, which would read as "this machine is free"."""
+    if amount is None:
+        return "unknown"
+    return f"€{amount:,.2f}"
+
+
+templates.env.filters["euro"] = _euro
 
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -102,6 +126,15 @@ def _machines_with_account_detail(session_id: str, status: dict) -> tuple[list, 
         return machines, f"Could not read machine details from Hetzner ({exc})."
 
     merged = inventory.merge_account_detail(machines, servers)
+
+    # The account is the only place a machine's creation time and price
+    # exist, and it forgets both the moment the machine is destroyed. So
+    # every reading of it is also written down: rows are opened for what is
+    # running and closed for what is not, which is what lets the month's
+    # estimate include a machine that ran for nine days and is now gone.
+    now = datetime.now(timezone.utc)
+    costs.record_running(merged, now)
+    costs.close_missing({machine.name for machine in merged if machine.status}, now)
     # A row that matched nothing keeps whatever the local records knew,
     # which is usually nothing -- and "unknown" on its own does not say
     # why. The two sides disagreeing about names is the reason worth
@@ -126,7 +159,12 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
     machines, machines_notice = _machines_with_account_detail(session_id, status)
     if machines_notice:
         notice = f"{notice} {machines_notice}" if notice else machines_notice
+    now = datetime.now(timezone.utc)
     return {
+        "machine_costs": {
+            machine.name: pricing.month_to_date(machine.created_at, now, machine.rates)
+            for machine in machines
+        },
         "error": error,
         "notice": notice,
         "machines": machines,
@@ -139,6 +177,19 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         "vault_configured": config.VAULT_FILE.exists(),
         **status,
     }
+
+
+@app.get("/machines/table", response_class=HTMLResponse)
+async def machines_table(request: Request):
+    """The machine list on its own, so it can refresh itself every minute.
+
+    A running machine's cost changes with the clock while nothing else on
+    the dashboard does, and reloading the whole page to watch a number tick
+    would throw away anything half-typed elsewhere on it.
+    """
+    return templates.TemplateResponse(
+        request, "fragments/machines_table.html", _dashboard_context(request)
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -1,0 +1,68 @@
+{#
+  Refreshed on its own every minute, because a running machine's cost
+  changes with the clock and nothing else on the page does. The confirm
+  fields carry hx-preserve so a swap never wipes a name someone is halfway
+  through typing.
+#}
+<div id="machines-table" hx-get="/machines/table" hx-trigger="every 60s" hx-swap="outerHTML">
+  {% if machines %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Address</th>
+        <th>Profile</th>
+        <th>Server size</th>
+        <th>Location</th>
+        <th class="num">Cost this month</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for machine in machines %}
+      <tr>
+        <td>
+          {# The dot carries the account's power state when it is known; a
+             machine nobody has asked about keeps the neutral one. Colour is
+             a second signal only, so anything but "running" also says so. #}
+          <span class="machine-name machine-{{ machine.status or 'unread' }}">{{ machine.name }}</span>
+          {% if machine.status and machine.status != 'running' %}
+          <span class="tag">{{ machine.status }}</span>
+          {% endif %}
+        </td>
+        <td class="mono muted">{{ machine.address or "unknown" }}</td>
+        <td><span class="tag">{{ machine.profile or "unknown" }}</span></td>
+        <td class="mono">{{ machine.server_type or "unknown" }}</td>
+        <td class="muted">
+          {{ machine.location or "unknown" }}{{ " · " ~ locations[machine.location] if machine.location in locations }}
+        </td>
+        <td class="num mono">
+          {{ machine_costs[machine.name] | euro }}
+          {% if machine.created_at %}
+          {# %-d is not portable (it fails on Windows, where the tests run),
+             so the zero-padded day it is. #}
+          <span class="helper" style="display: block">since {{ machine.created_at.strftime('%d %b %H:%M') }} UTC</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="row-actions">
+            <form method="post" action="/machines/{{ machine.name }}/configure">
+              <button class="btn-sm" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Configure</button>
+            </form>
+            <form method="post" action="/machines/{{ machine.name }}/destroy">
+              <input id="confirm-{{ machine.name }}" hx-preserve="true" type="text" name="confirm_name"
+                     placeholder="type '{{ machine.name }}' to confirm" required>
+              <button class="btn-sm btn-critical" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Destroy</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="card-body">
+    <p class="card-note">No machines yet. <a href="/create">Provision one.</a></p>
+  </div>
+  {% endif %}
+</div>

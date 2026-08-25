@@ -44,6 +44,13 @@ SEEDED_VERSION_FILE = STATE_DIR / "seeded-version"
 # command line, outside the interface, simply has no entry here.
 MACHINE_DETAILS_FILE = STATE_DIR / "machine_details.json"
 
+# The cost ledger (webui/costs.py): one row per life of a machine, so the
+# month's estimate can include machines that no longer exist. SQLite rather
+# than a service, for the reasons in that module's docstring; it lives in
+# the volume, so it survives a restart and an image upgrade like everything
+# else the operator owns.
+COST_DB_FILE = STATE_DIR / "costs.sqlite3"
+
 # Repository defaults, baked into the image, read-only at runtime.
 DEFAULT_POOL_FILE = ANSIBLE_ROOT / "playbooks" / "vars" / "hostname_pool_hcloud.yml"
 VAULT_TEMPLATE_FILE = INVENTORIES_DIR / "group_vars" / "all" / "vault-template.yml"

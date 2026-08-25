@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from webui import inventory, pool, seed, vault
+from webui import config, hcloud_api, inventory, pool, seed, vault
 from webui.app import SESSION_COOKIE_NAME, app, secret_store
 
 TOKEN = "test-token"
@@ -37,10 +37,14 @@ MACHINES = [
 
 
 @pytest.fixture(autouse=True)
-def volume_state(monkeypatch):
+def volume_state(monkeypatch, tmp_path):
     """The volume these pages read lives at /ansible in the image and does
-    not exist on a developer machine, so the three reads the shell makes on
-    every dashboard render are answered from here instead."""
+    not exist on a developer machine, so the reads the shell makes on every
+    dashboard render are answered from here instead -- including the two
+    that would otherwise reach outside the checkout: the Hetzner account,
+    and the cost ledger's file."""
+    monkeypatch.setattr(config, "COST_DB_FILE", tmp_path / "costs.sqlite3")
+    monkeypatch.setattr(hcloud_api, "list_servers", lambda token: [])
     monkeypatch.setattr(pool, "status", lambda **kwargs: POOL)
     monkeypatch.setattr(inventory, "list_machines", lambda **kwargs: list(MACHINES))
     monkeypatch.setattr(seed, "needs_defaults_refresh", lambda: False)

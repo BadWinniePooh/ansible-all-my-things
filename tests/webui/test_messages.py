@@ -41,6 +41,7 @@ def volume_state(monkeypatch, tmp_path):
         lambda token, reference: {"name": reference, "description": reference},
     )
     monkeypatch.setattr(hcloud_api, "list_servers", lambda token: [])
+    monkeypatch.setattr(config, "COST_DB_FILE", tmp_path / "costs.sqlite3")
 
 
 @pytest.fixture

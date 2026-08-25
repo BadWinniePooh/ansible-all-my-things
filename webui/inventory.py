@@ -15,12 +15,13 @@ the account itself says, through merge_account_detail below.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
-from . import config
+from . import config, pricing
 
 _PROFILE_GROUPS = ("basic", "desktop")
 
@@ -36,6 +37,12 @@ class Machine:
     # (webui/app.py _machines_with_account_detail). None means nobody has
     # asked the account, not that the machine is off.
     status: str | None = None
+    # When the account says the machine was created, and what it charges
+    # for it there. Together these are everything a cost needs; without
+    # them the interface says "unknown" rather than estimating from a
+    # guessed start (webui/pricing.py).
+    created_at: datetime | None = None
+    rates: pricing.Rates = field(default=pricing.NO_RATES)
 
 
 def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[Machine]:
@@ -55,13 +62,16 @@ def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[M
         if server is None:
             merged.append(machine)
             continue
+        location = _location_of(server) or machine.location
         merged.append(
             replace(
                 machine,
                 address=_address_of(server) or machine.address,
                 server_type=_name_of(server.get("server_type")) or machine.server_type,
-                location=_location_of(server) or machine.location,
+                location=location,
                 status=server.get("status"),
+                created_at=pricing.parse_timestamp(server.get("created")),
+                rates=pricing.rates_for(server.get("server_type"), location),
             )
         )
     return merged
