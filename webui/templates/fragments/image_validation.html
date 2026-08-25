@@ -1,0 +1,8 @@
+<div id="image-validation" class="image-check image-check-{{ check.state }}">
+  {% if check.message %}
+  <small>{{ check.message }}</small>
+  {% endif %}
+  {% if check.note %}
+  <small class="image-check-note">{{ check.note }}</small>
+  {% endif %}
+</div>

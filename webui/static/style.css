@@ -93,6 +93,26 @@ form label {
   opacity: 0.55;
 }
 
+/* Verdict of the live image-name check. Colour is a second signal only:
+   every state also says what it means in words. */
+.image-check {
+  display: block;
+  margin: -0.25rem 0 0.75rem;
+}
+
+.image-check-ok {
+  color: #1a7f37;
+}
+
+.image-check-missing,
+.image-check-error {
+  color: #b42318;
+}
+
+.image-check-note {
+  display: block;
+}
+
 input, select, button {
   font: inherit;
   padding: 0.35rem 0.5rem;

@@ -60,6 +60,9 @@
         custom.value = "";
         rememberedImage = event.target.value;
         apply();
+        // Assigning .value fires no input event, so the live name check
+        // would keep showing a verdict for a value no longer in the field.
+        custom.dispatchEvent(new Event("input", { bubbles: true }));
       }
     }
   });

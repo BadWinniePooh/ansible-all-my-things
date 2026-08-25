@@ -54,8 +54,11 @@
     {% include "fragments/image_options.html" %}
     <label>
       Other (free text)
-      <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12">
+      <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12"
+        hx-get="/create/validate-image" hx-trigger="input changed delay:500ms, change"
+        hx-target="#image-validation" hx-swap="outerHTML">
     </label>
+    {% include "fragments/image_validation.html" %}
   </fieldset>
 
   <button type="button" hx-post="/create/preview" hx-include="closest form" hx-target="#command-preview-wrap" hx-swap="innerHTML">

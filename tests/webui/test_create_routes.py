@@ -94,14 +94,27 @@ def unlocked(client):
 
 
 @pytest.fixture
-def live_catalogue(monkeypatch):
+def image_found(monkeypatch):
+    """The image-name check is a deliberate API call on every render that
+    has a free-text image and on every submission, so it is stubbed for
+    every test here rather than left to reach the network."""
+
+    def find_image(token, reference):
+        return {"name": reference, "description": reference, "architecture": "x86"}
+
+    monkeypatch.setattr(hcloud_api, "find_image", find_image)
+
+
+@pytest.fixture
+def live_catalogue(monkeypatch, image_found):
     monkeypatch.setattr(hcloud_api, "list_server_types", lambda token: list(LIVE_SERVER_TYPES))
     monkeypatch.setattr(hcloud_api, "list_images", lambda token: list(LIVE_IMAGES))
 
 
 @pytest.fixture
-def no_network(monkeypatch):
-    """Any Hetzner call is a test failure unless a test opts into one."""
+def no_network(monkeypatch, image_found):
+    """The two catalogue lookups must not run on the built-in path. The
+    image check is exempt: it is what replaces failing during the run."""
 
     def refuse(*args, **kwargs):
         pytest.fail("the static path must not call the Hetzner API")
@@ -353,6 +366,161 @@ def test_free_text_image_leaves_the_image_list_unselected_on_redisplay(
 def test_the_page_loads_the_script_enforcing_that_exclusivity(client, no_network):
     assert "/static/image-choice.js" in client.get("/create").text
     assert client.get("/static/image-choice.js").status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Live image-name check
+# --------------------------------------------------------------------------
+
+
+def test_image_check_says_nothing_for_an_empty_field(client, unlocked, monkeypatch):
+    monkeypatch.setattr(
+        hcloud_api, "find_image", lambda *a: pytest.fail("must not look up an empty name")
+    )
+
+    response = client.get("/create/validate-image", params={"image_custom": "  "})
+
+    assert response.status_code == 200
+    assert 'id="image-validation"' in response.text
+    assert "available" not in response.text
+
+
+def test_image_check_confirms_a_name_the_account_has(client, unlocked, monkeypatch):
+    monkeypatch.setattr(
+        hcloud_api,
+        "find_image",
+        lambda token, reference: {"name": reference, "description": "Debian 12"},
+    )
+
+    response = client.get("/create/validate-image", params={"image_custom": "debian-12"})
+
+    assert "Debian 12 is available." in response.text
+    assert "image-check-ok" in response.text
+
+
+def test_image_check_reports_a_name_the_account_does_not_have(client, unlocked, monkeypatch):
+    monkeypatch.setattr(hcloud_api, "find_image", lambda token, reference: None)
+
+    response = client.get("/create/validate-image", params={"image_custom": "ubuntu-99.04"})
+
+    assert "ubuntu-99.04" in response.text
+    assert "No x86 image named" in response.text
+    assert "image-check-missing" in response.text
+
+
+def test_image_check_warns_about_a_deprecated_image(client, unlocked, monkeypatch):
+    monkeypatch.setattr(
+        hcloud_api,
+        "find_image",
+        lambda token, reference: {
+            "name": reference,
+            "description": "Ubuntu 20.04",
+            "deprecated": "2026-04-01T00:00:00+00:00",
+        },
+    )
+
+    response = client.get("/create/validate-image", params={"image_custom": "ubuntu-20.04"})
+
+    assert "is available" in response.text
+    assert "deprecated" in response.text
+
+
+def test_image_check_says_why_it_cannot_run_without_a_token(client, monkeypatch):
+    monkeypatch.setattr(
+        hcloud_api, "find_image", lambda *a: pytest.fail("must not call the API while locked")
+    )
+
+    response = client.get("/create/validate-image", params={"image_custom": "debian-12"})
+
+    assert "Unlock the Hetzner API token" in response.text
+
+
+def test_image_check_surfaces_a_lookup_failure(client, unlocked, monkeypatch):
+    def boom(token, reference):
+        raise hcloud_api.HetznerApiError("502 Bad Gateway")
+
+    monkeypatch.setattr(hcloud_api, "find_image", boom)
+
+    response = client.get("/create/validate-image", params={"image_custom": "debian-12"})
+
+    assert "502 Bad Gateway" in response.text
+    assert "image-check-error" in response.text
+
+
+def test_create_refuses_an_image_the_account_does_not_have(
+    client, unlocked, no_network, ready_to_provision, monkeypatch
+):
+    """The live check is advisory -- scripting off, a stale preset, or a
+    fast submit all bypass it. This gate is what stops a bad name from
+    reaching a run that has already claimed a pool name."""
+    monkeypatch.setattr(hcloud_api, "find_image", lambda token, reference: None)
+
+    response = client.post(
+        "/create",
+        data={**VALID_FORM, "image_custom": "ubuntu-99.04"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "No x86 image named" in response.text
+    assert ready_to_provision == []
+
+
+def test_create_refuses_when_the_image_lookup_itself_fails(
+    client, unlocked, no_network, ready_to_provision, monkeypatch
+):
+    def boom(token, reference):
+        raise hcloud_api.HetznerApiError("502 Bad Gateway")
+
+    monkeypatch.setattr(hcloud_api, "find_image", boom)
+
+    response = client.post("/create", data=VALID_FORM, follow_redirects=False)
+
+    assert response.status_code == 400
+    assert "Could not check image" in response.text
+    assert ready_to_provision == []
+
+
+def test_create_gate_also_covers_an_image_picked_from_the_built_in_list(
+    client, unlocked, no_network, ready_to_provision, monkeypatch
+):
+    """The built-in list goes stale as Hetzner adds and withdraws releases,
+    so it is checked on the same terms as free text."""
+    checked = []
+
+    def find_image(token, reference):
+        checked.append(reference)
+        return None
+
+    monkeypatch.setattr(hcloud_api, "find_image", find_image)
+
+    response = client.post(
+        "/create", data={**VALID_FORM, "image_select": "ubuntu-26.04"}, follow_redirects=False
+    )
+
+    assert response.status_code == 400
+    assert checked == ["ubuntu-26.04"]
+    assert ready_to_provision == []
+
+
+def test_create_page_checks_an_image_carried_in_by_a_preset(client, unlocked, no_network, monkeypatch):
+    monkeypatch.setattr(
+        app_module.presets,
+        "get",
+        lambda name: app_module.presets.Preset(
+            name=name,
+            profile="basic",
+            server_type="cx23",
+            location="fsn1",
+            image="ubuntu-99.04",
+        ),
+    )
+    monkeypatch.setattr(hcloud_api, "find_image", lambda token, reference: None)
+
+    response = client.get("/create", params={"preset": "stale-box"})
+
+    assert response.status_code == 200
+    assert "No x86 image named" in response.text
 
 
 def test_create_starts_a_run_for_a_valid_submission(

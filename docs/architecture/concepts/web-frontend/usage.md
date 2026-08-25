@@ -101,8 +101,18 @@ what is about to be provisioned. Clicking an entry in the list is how you
 switch back; that empties the free-text field. Emptying it by hand restores
 whatever was selected before.
 
-A free-text name is passed through as given: one Hetzner does not know fails
-during the run, not on this screen.
+**The image name is checked against your account, not guessed at.** As you
+type into *Other*, the field reports whether that image actually exists —
+green when it does, red with the reason when it does not. A deprecated image
+is flagged but allowed; it still boots until Hetzner withdraws it. Both forms
+work: an image name such as `debian-12`, and a numeric image id, which is how
+to boot one of your own snapshots.
+
+The check needs the API token unlocked; until then the field says so instead
+of guessing. It also runs at submission time on whichever image is selected —
+including one picked from the built-in list, which goes stale as Hetzner adds
+and withdraws releases — so provisioning is refused up front rather than
+failing minutes later with a name already taken from the pool.
 
 *Preview command* renders the exact `ansible-playbook` invocation the current
 choices produce, without running anything.

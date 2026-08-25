@@ -479,6 +479,11 @@ def _create_form_context(
         "images": images,
         "presets": presets.list_presets(),
         "selected": selected,
+        # A preset can carry a free-text image, and a rejected submission
+        # carries back whatever was typed, so the check runs on render too
+        # rather than waiting for the field to be touched. An empty field
+        # costs no API call.
+        "check": _check_image(session_id, status, selected.get("image_custom") or ""),
     }
 
 
@@ -517,6 +522,59 @@ def _selected_from_form(form) -> dict:
         "image": None if image_custom else (image_select if image_select in known_images else None),
         "image_custom": image_custom,
     }
+
+
+def _check_image(session_id: str, status: dict, image: str) -> dict:
+    """Ask Hetzner whether one image reference exists for this account.
+
+    Returns a state the fragment renders and POST /create gates on:
+
+    - ``empty``    nothing typed yet, say nothing
+    - ``unlocked`` the token is locked, so the check cannot run
+    - ``ok``       found (``note`` carries a deprecation warning if any)
+    - ``missing``  the account has no such x86 image
+    - ``error``    the lookup itself failed
+
+    Checking here rather than letting the run fail is the whole point: a
+    bad image name otherwise surfaces minutes later, inside playbook
+    output, after a machine has already been claimed from the name pool.
+    """
+    image = image.strip()
+    if not image:
+        return {"state": "empty", "message": "", "note": None}
+    if not status["token_unlocked"]:
+        return {
+            "state": "unlocked",
+            "message": "Unlock the Hetzner API token to check this image name.",
+            "note": None,
+        }
+
+    try:
+        found = hcloud_api.find_image(secret_store.hcloud_token(session_id), image)
+    except hcloud_api.HetznerApiError as exc:
+        return {
+            "state": "error",
+            "message": f"Could not check image '{image}' with Hetzner ({exc}).",
+            "note": None,
+        }
+
+    if found is None:
+        return {
+            "state": "missing",
+            "message": (
+                f"No x86 image named '{image}' in this account. Check the spelling, "
+                "or turn on the full catalogue above to pick from the list."
+            ),
+            "note": None,
+        }
+
+    label = found.get("description") or found.get("name") or image
+    note = None
+    if found.get("deprecated"):
+        # Still bootable until Hetzner withdraws it, so this is a warning
+        # rather than a refusal.
+        note = f"This image is deprecated (withdrawn {found['deprecated']})."
+    return {"state": "ok", "message": f"{label} is available.", "note": note}
 
 
 def _server_types_for_submission(session_id: str, status: dict, form) -> tuple[dict[str, dict], str | None]:
@@ -661,6 +719,21 @@ async def create_images_fragment(request: Request, images_live: str = "", image:
     )
 
 
+@app.get("/create/validate-image", response_class=HTMLResponse)
+async def create_validate_image_fragment(request: Request, image_custom: str = ""):
+    """Backs the live check on the free-text image field (create.html). Read
+    only, and advisory: POST /create runs the same check as a hard gate, so
+    a user who never triggers this one is still not allowed to start a run
+    on an image that does not exist."""
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    return templates.TemplateResponse(
+        request,
+        "fragments/image_validation.html",
+        {"check": _check_image(session_id, status, image_custom)},
+    )
+
+
 @app.get("/create", response_class=HTMLResponse)
 async def create_form(request: Request, preset: str | None = None):
     session_id = request.state.session_id
@@ -731,6 +804,20 @@ async def create_start(request: Request):
             session_id,
             error=_with_catalogue_notice(exc.message, notice),
             selected=_selected_from_form(form),
+        )
+        return templates.TemplateResponse(request, "create.html", context, status_code=400)
+
+    # The live check on the free-text field is advisory -- it can be
+    # bypassed with scripting off, by a preset carrying a stale image, or by
+    # editing and submitting fast enough. This is the gate that actually
+    # holds: an image the account cannot see must not reach a run, where it
+    # would fail minutes later with a name already claimed from the pool.
+    # It covers the built-in list too, which can go stale as Hetzner adds
+    # and withdraws releases.
+    image_check = _check_image(session_id, status, choices["image"])
+    if image_check["state"] in {"missing", "error"}:
+        context = _create_form_context(
+            status, session_id, error=image_check["message"], selected=_selected_from_form(form)
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 

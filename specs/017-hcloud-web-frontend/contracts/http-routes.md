@@ -55,6 +55,7 @@ requires a second confirmation before replacing it.
 | `GET` | `/create/server-types` | — (token for live sizes) | Fragment: the server-size table, plus the location fieldset out of band |
 | `GET` | `/create/locations` | — (token for live sizes) | Fragment: the location fieldset scoped to one server size |
 | `GET` | `/create/images` | — (token for the live catalogue) | Fragment: the operating-system image options |
+| `GET` | `/create/validate-image` | — (token to actually check) | Fragment: whether one free-text image name exists in the account |
 | `POST` | `/create/preview` | — | Fragment: the exact command that would run, without running it |
 | `POST` | `/create` | token + vault password | Start a provisioning run |
 | `POST` | `/machines/{name}/configure` | token + vault password | Start a configuration run against one machine |
@@ -78,6 +79,7 @@ no-`GET`-mutates rule below.
 | `/create/server-types` | `server_types_live`, `server_type`, `location` | `#server-types-table`, followed by `#location-fieldset` carrying `hx-swap-oob="true"` |
 | `/create/locations` | `server_type`, `location`, `server_types_live` | `#location-fieldset` |
 | `/create/images` | `images_live`, `image` | `#image-options` |
+| `/create/validate-image` | `image_custom` | `#image-validation` |
 
 `server_types_live` and `images_live` carry the state of the two "show
 everything from Hetzner" toggles on the form. When either is set, the account's
@@ -109,9 +111,28 @@ is ever substituted for a missing choice (Principle XII). `POST /create`
 re-renders the form with the submitted choices intact; `POST /create/preview`
 returns the message in place of a command.
 
-The image field accepts free text by design, so it is checked for presence
-only — an unrecognised name is the user's own choice and Hetzner rejects it by
-name if it does not exist.
+### Image existence
+
+Whichever image the submission resolves to — free text or an entry from the
+list — is looked up in the account before a run starts. `POST /create` refuses
+when the image is not found, and equally when the lookup itself fails: an
+unverifiable image is not a verified one, and the same failure would almost
+certainly break the run seconds later.
+
+The lookup accepts both forms the playbook's `image:` parameter takes: a name
+(`ubuntu-24.04`), resolved through `GET /images` filtered to available x86
+images; and a numeric id, resolved through `GET /images/{id}`, which is the
+only way to reach a snapshot, since snapshots carry a description rather than
+a name. An image found by id but not on x86 is treated as not found.
+
+A deprecated image is a warning, not a refusal — it still boots until Hetzner
+withdraws it.
+
+`GET /create/validate-image` reports the same verdict live as the free-text
+field is typed into. It is advisory: with scripting off, or from a preset
+carrying an image that has since been withdrawn, only the gate on `POST
+/create` is reached. The built-in list is checked on the same terms, since it
+goes stale as Hetzner adds and withdraws releases.
 
 ## Runs
 
