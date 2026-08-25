@@ -437,6 +437,47 @@ def _resolved_image(selected: dict) -> str:
     return (selected.get("image_custom") or "").strip() or (selected.get("image") or "")
 
 
+def _preset_fields(selected: dict) -> dict[str, str]:
+    """The current choices as the rail compares them: short labels, short
+    values. The two catalogue toggles are part of a preset, so a form that
+    differs only in which list it was picked from is a form that differs."""
+    return {
+        "Profile": selected.get("profile") or "",
+        "Size": selected.get("server_type") or "",
+        "Location": selected.get("location") or "",
+        "Image": _resolved_image(selected),
+        "Size list": "live" if selected.get("server_types_live") else "built-in",
+        "Image list": "live" if selected.get("images_live") else "built-in",
+    }
+
+
+def _preset_diff(selected: dict, preset: presets.Preset | None) -> list[dict[str, str]]:
+    """Field by field, what the form says now against what the preset says.
+
+    An empty list means the form still is that preset. The rail renders
+    this on load; static/preset-selection.js recomputes it after every
+    edit, from the same preset data, so the two agree.
+    """
+    if preset is None:
+        return []
+    saved = _preset_fields(
+        {
+            "profile": preset.profile,
+            "server_type": preset.server_type,
+            "location": preset.location,
+            "image_custom": preset.image,
+            "server_types_live": preset.server_types_live,
+            "images_live": preset.images_live,
+        }
+    )
+    current = _preset_fields(selected)
+    return [
+        {"field": field, "was": saved[field], "now": current[field]}
+        for field in saved
+        if saved[field] != current[field]
+    ]
+
+
 def _matching_preset(selected: dict, all_presets: list[presets.Preset]) -> str | None:
     """The preset the current choices already are, if any.
 
@@ -564,6 +605,7 @@ def _create_form_context(
     error: str | None = None,
     selected: dict | None = None,
     restoring: str | None = None,
+    preset_base: str | None = None,
 ) -> dict:
     # The curated static lists on a fresh render (FR: "by default the
     # hardcoded defaults should be shown"). A live catalogue is fetched
@@ -624,6 +666,11 @@ def _create_form_context(
         error = f"{error} {restore_error}" if error else restore_error
 
     all_presets = presets.list_presets()
+    # Which preset the form started from, kept across edits by a hidden
+    # field, so the rail can keep saying what changed since it was loaded
+    # rather than only until the first edit.
+    base_name = preset_base or restoring
+    base = next((preset for preset in all_presets if preset.name == base_name), None)
     return {
         **status,
         "error": error,
@@ -632,6 +679,8 @@ def _create_form_context(
         "locations": locations,
         "images": images,
         "presets": all_presets,
+        "preset_base": base.name if base else None,
+        "preset_diff": _preset_diff(selected, base),
         # The same list the matching above walks, for the browser to walk
         # after every edit without a round trip (static/preset-selection.js).
         "presets_json": json.dumps([asdict(preset) for preset in all_presets]),
@@ -990,6 +1039,7 @@ async def create_start(request: Request):
             session_id,
             error=_with_catalogue_notice(exc.message, notice),
             selected=_selected_from_form(form),
+            preset_base=(form.get("preset_base") or "") or None,
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
@@ -1003,7 +1053,11 @@ async def create_start(request: Request):
     image_check = _check_image(session_id, status, choices["image"])
     if image_check["state"] in {"missing", "error"}:
         context = _create_form_context(
-            status, session_id, error=image_check["message"], selected=_selected_from_form(form)
+            status,
+            session_id,
+            error=image_check["message"],
+            selected=_selected_from_form(form),
+            preset_base=(form.get("preset_base") or "") or None,
         )
         return templates.TemplateResponse(request, "create.html", context, status_code=400)
 
@@ -1236,6 +1290,44 @@ async def presets_save(request: Request):
         return _flash(request, messages.preset_name_taken(name), tone="error", status_code=409)
 
     return _flash(request, messages.preset_saved(name))
+
+
+@app.post("/presets/{name}/update", response_class=HTMLResponse)
+async def presets_update(name: str, request: Request):
+    """Fragment: write the current create-form choices over an existing
+    preset (the rail's Update action).
+
+    Validated exactly as saving a new one is, for the same reason: a
+    preset that silently recorded a default nobody picked would hand that
+    wrong choice back on every later load of it.
+    """
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    form = await request.form()
+
+    server_types, notice = _server_types_for_submission(session_id, status, form)
+    try:
+        choices = _create_choices_from_form(form, server_types)
+    except CreateChoicesInvalid as exc:
+        return _flash(
+            request, _with_catalogue_notice(exc.message, notice), tone="error", status_code=400
+        )
+
+    try:
+        presets.get(name)
+    except presets.PresetNotFound:
+        return _flash(request, messages.preset_missing(name), tone="error", status_code=404)
+
+    presets.save(
+        presets.Preset(
+            name=name,
+            **choices,
+            server_types_live=bool(form.get("server_types_live")),
+            images_live=bool(form.get("images_live")),
+        ),
+        overwrite=True,
+    )
+    return _flash(request, messages.preset_updated(name))
 
 
 @app.post("/presets/{name}/delete")

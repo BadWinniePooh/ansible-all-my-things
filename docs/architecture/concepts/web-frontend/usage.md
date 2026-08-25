@@ -157,20 +157,29 @@ owns those, because they are about a machine rather than about a form.
 
 ## Presets
 
-A preset is a saved set of create-form choices. The selector at the top of the
-create screen loads one; it is not rendered at all until at least one preset
-exists, since it would otherwise offer only *Custom*, which is what the form
-already is.
+A preset is a saved set of create-form choices. They live in a column beside
+the create form — the rail — which is not rendered at all until at least one
+preset exists.
 
-**The selector names what the form currently is.** Editing any choice moves it
-to *Custom*, because the form no longer describes the preset that was loaded.
-Arriving at a saved preset's choices by hand moves it back to that preset —
-matching is on the choices, not on which preset was clicked.
+**The rail says where the form came from and what you have changed since.**
+The preset the form was loaded from is marked and offers *Reset*, which loads
+it again and throws the edits away. Under the list, the difference from that
+preset is spelled out field by field — *Size cx33 → cx43* — and updates as you
+edit, without a page load.
 
-**Choices that are already saved cannot be saved again.** When the form
-matches a preset, the save box says which one holds them and refuses input:
-saving would either fail on the taken name or leave two presets saying the
-same thing.
+**Two ways to keep a change.** *Update &lt;preset&gt;* writes the current choices
+over the preset the form came from; *Save as new* stores them under a new name.
+Both validate exactly as provisioning does, so a preset can never record a
+default nobody picked.
+
+**Choices that are already saved cannot be saved again.** When the form matches
+a preset exactly, saving is refused and the box says which preset holds them —
+otherwise it would either fail on the taken name or leave two presets saying
+the same thing. Matching is on the choices, not on which preset was clicked, so
+it catches choices arrived at by hand too.
+
+Renaming and deleting stay on the presets screen, one click away through
+*Manage presets*.
 
 **A preset records which catalogue it was made from.** A size or an image that
 only exists in the live Hetzner catalogue is not in the built-in lists, so a

@@ -53,6 +53,10 @@ def preset_saved(name: str) -> str:
     return f"Preset {name} saved."
 
 
+def preset_updated(name: str) -> str:
+    return f"Preset {name} updated."
+
+
 def preset_already_saved(name: str) -> str:
     return f"These choices are already saved as {name}."
 

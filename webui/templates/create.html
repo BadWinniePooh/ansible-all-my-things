@@ -2,35 +2,11 @@
 {% set active = 'create' %}
 {% block title %}Create VM — Steward{% endblock %}
 {% block heading %}Create VM{% endblock %}
-{% block topbar %}
-  {#
-    Hidden entirely when nothing is saved: an empty selector would only
-    ever offer "Custom", which is what the form already is.
-  #}
-  {% if presets %}
-  {#
-    The selector names the preset the form currently *is*, which is the
-    one that was loaded, or -- for choices arrived at by hand -- whichever
-    preset already holds them. Anything else is Custom.
-  #}
-  {% set current_preset = selected_preset or matching_preset %}
-  <form id="preset-picker" class="row-actions" method="get" action="/create">
-    <label class="toggle-row" for="preset-select">Preset</label>
-    <select id="preset-select" name="preset">
-      <option value="" {{ 'selected' if not current_preset }}>Custom</option>
-      {% for preset in presets %}
-      <option value="{{ preset.name }}" {{ 'selected' if preset.name == current_preset }}>{{ preset.name }}</option>
-      {% endfor %}
-    </select>
-    <button class="btn-sm" type="submit">Load</button>
-    <a class="helper" href="/presets">Manage</a>
-  </form>
-  {% endif %}
-{% endblock %}
 {% block content %}
 
-{# Read by static/preset-selection.js to keep the selector and the save box
-   honest after every edit, without a round trip. #}
+{# Read by static/preset-selection.js, which keeps the rail's difference
+   list and its two buttons right as the form is edited, without a round
+   trip. #}
 <script type="application/json" id="preset-data">{{ presets_json | safe }}</script>
 
 {% if not (token_unlocked and vault_unlocked) %}
@@ -40,7 +16,13 @@
 </p>
 {% endif %}
 
+<div class="columns {{ 'columns-single' if not presets }}">
+
 <form id="create-form" method="post" action="/create" class="stack">
+
+  {# Which preset the form started from. Carried through submissions so a
+     rejected one comes back still knowing what it was based on. #}
+  <input type="hidden" name="preset_base" id="preset-base" value="{{ preset_base or '' }}">
 
   <section>
     <h2>Profile</h2>
@@ -123,30 +105,86 @@
 
 </form>
 
-<section id="save-preset">
-  <h2>Save these choices as a preset</h2>
-  <div class="card-body">
-    {#
-      Saving what is already saved either fails on the taken name or makes
-      a second preset that says the same thing, so it is refused here and
-      the box names the preset that already holds these choices.
-      preset-selection.js keeps this state right as the form is edited.
-    #}
-    <p id="preset-save-note" class="card-note" {{ 'hidden' | safe if not matching_preset }}>
-      These choices are already saved as
-      <strong id="preset-save-match">{{ matching_preset or '' }}</strong>.
-    </p>
-    <form method="post" action="/presets" class="form-actions">
-      <input id="preset-save-name" type="text" name="name" placeholder="preset name" required
-        {{ 'disabled' if matching_preset }}>
-      <button id="preset-save-button" type="button"
-        hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML"
-        {{ 'disabled' if matching_preset }}>
-        Save preset
+{#
+  The rail: which preset the form came from, how it differs now, and the
+  two ways to keep the difference. Not rendered at all when nothing is
+  saved -- an empty rail is a column of nothing.
+#}
+{% if presets %}
+<div class="stack" id="preset-rail">
+  <section>
+    <h2>Presets</h2>
+    <div class="card-body">
+      <div class="rail">
+        {% for preset in presets %}
+        <div class="rail-item {{ 'is-active' if preset.name == preset_base }}" data-preset="{{ preset.name }}">
+          <span class="grow">
+            {{ preset.name }}
+            <span class="summary">{{ preset.profile }} · {{ preset.server_type }} · {{ preset.location }}</span>
+          </span>
+          <a class="btn btn-sm" href="/create?preset={{ preset.name }}">
+            {{ 'Reset' if preset.name == preset_base else 'Load' }}
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      <a class="helper" href="/presets">Manage presets</a>
+    </div>
+  </section>
+
+  <section id="preset-changes" {{ 'hidden' | safe if not preset_base }}>
+    <h2><span id="preset-changes-count">{{ preset_diff | length }}</span>
+        change{{ '' if preset_diff | length == 1 else 's' }} from
+        <span id="preset-changes-base">{{ preset_base or '' }}</span></h2>
+    <div class="card-body">
+      <div class="diff" id="preset-diff" {{ 'hidden' | safe if not preset_diff }}>
+        {% for change in preset_diff %}
+        <div class="diff-row">
+          <span class="field">{{ change.field }}</span>
+          <span class="was">{{ change.was }}</span>
+          <span class="now">{{ change.now }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p id="preset-diff-none" class="card-note" {{ 'hidden' | safe if preset_diff }}>
+        The form still matches this preset.
+      </p>
+      <button id="preset-update-button" type="button"
+        hx-post="/presets/{{ preset_base or '' }}/update" hx-include="#create-form"
+        hx-target="#preset-save-result" hx-swap="innerHTML"
+        {{ 'disabled' if not preset_diff }}>
+        Update <span id="preset-update-name">{{ preset_base or '' }}</span>
       </button>
-    </form>
-    <div id="preset-save-result"></div>
-  </div>
-</section>
+    </div>
+  </section>
+
+  <section id="save-preset">
+    <h2>Save as new</h2>
+    <div class="card-body">
+      {#
+        Saving what is already saved either fails on the taken name or
+        makes a second preset that says the same thing, so it is refused
+        here and the box names the preset that already holds these choices.
+      #}
+      <p id="preset-save-note" class="card-note" {{ 'hidden' | safe if not matching_preset }}>
+        These choices are already saved as
+        <strong id="preset-save-match">{{ matching_preset or '' }}</strong>.
+      </p>
+      <div class="form-actions">
+        <input id="preset-save-name" type="text" name="name" placeholder="preset name" required
+          {{ 'disabled' if matching_preset }}>
+        <button id="preset-save-button" type="button"
+          hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML"
+          {{ 'disabled' if matching_preset }}>
+          Save
+        </button>
+      </div>
+      <div id="preset-save-result"></div>
+    </div>
+  </section>
+</div>
+{% endif %}
+
+</div>
 
 {% endblock %}

@@ -1,8 +1,9 @@
-"""The create screen's preset selector, and the refusal to save choices
-that are already saved.
+"""The preset rail on the create screen.
 
-The selector and the save box are also maintained in the browser
-(static/preset-selection.js) after every edit; these tests pin the answers
+The rail says which preset the form came from, how the current choices
+differ from it, and offers the two ways to keep the difference: update that
+preset, or save a new one. static/preset-selection.js recomputes the
+difference and both buttons after every edit; these tests pin the answers
 the server renders, which are what a browser without scripting gets and
 what the script starts from.
 """
@@ -15,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from webui import config, hcloud_api, presets
-from webui.app import SESSION_COOKIE_NAME, app, secret_store
+from webui.app import SESSION_COOKIE_NAME, _preset_diff, app, secret_store
 
 TOKEN = "test-token"
 PASSWORD = "test-vault-password"
@@ -29,12 +30,10 @@ SAMPLE = presets.Preset(
 )
 
 
-def _save_is_disabled(body: str) -> bool:
-    """Whether the save-preset box refuses input, read off the two controls
-    rather than off exact markup, so a whitespace change is not a failure."""
-    name_field = body.split('id="preset-save-name"', 1)[1].split(">", 1)[0]
-    button = body.split('id="preset-save-button"', 1)[1].split(">", 1)[0]
-    return "disabled" in name_field and "disabled" in button
+def _control(body: str, element_id: str) -> str:
+    """The opening tag of one control, read off its id rather than off
+    exact markup, so a whitespace change is not a failure."""
+    return body.split(f'id="{element_id}"', 1)[1].split(">", 1)[0]
 
 
 @pytest.fixture
@@ -71,49 +70,134 @@ def unlocked(client):
     return session_id
 
 
-def test_no_selector_when_nothing_is_saved(client, unlocked, presets_file):
+def test_no_rail_when_nothing_is_saved(client, unlocked, presets_file):
     body = client.get("/create").text
-    assert 'id="preset-select"' not in body
-    assert 'id="preset-picker"' not in body
+    assert 'id="preset-rail"' not in body
+    # ...and the form takes the whole width rather than leaving a gap.
+    assert "columns-single" in body
 
 
-def test_the_selector_lists_every_preset_and_custom(client, unlocked, presets_file):
+def test_the_rail_lists_every_preset_with_what_it_contains(client, unlocked, presets_file):
     presets.save(SAMPLE)
     body = client.get("/create").text
-    assert 'id="preset-select"' in body
-    assert ">Custom<" in body
-    assert ">dev-desktop<" in body
+    assert 'id="preset-rail"' in body
+    assert "dev-desktop" in body
+    assert "desktop · cx33 · nbg1" in body
 
 
-def test_loading_a_preset_marks_it_as_the_selection(client, unlocked, presets_file):
+def test_loading_a_preset_marks_it_and_offers_reset(client, unlocked, presets_file):
     presets.save(SAMPLE)
     body = client.get("/create?preset=dev-desktop").text
-    assert '<option value="dev-desktop" selected>' in body
-    assert '<option value="" selected>' not in body
+    assert 'class="rail-item is-active"' in body
+    assert ">\n            Reset\n          </a>" in body
 
 
-def test_choices_that_are_not_a_preset_render_as_custom(client, unlocked, presets_file):
-    presets.save(SAMPLE)
-    body = client.get("/create").text
-    # The defaults are not this preset, so the selector says Custom and
-    # saving stays available: the note is present but hidden, because
-    # preset-selection.js reveals it without a round trip.
-    assert '<option value="" selected>' in body
-    assert 'id="preset-save-note" class="card-note" hidden' in body
-    assert not _save_is_disabled(body)
-
-
-def test_a_loaded_preset_disables_saving_and_names_itself(client, unlocked, presets_file):
+def test_a_freshly_loaded_preset_has_nothing_to_update(client, unlocked, presets_file):
     presets.save(SAMPLE)
     body = client.get("/create?preset=dev-desktop").text
-    assert "These choices are already saved as" in body
-    assert 'id="preset-save-note" class="card-note" hidden' not in body
-    assert _save_is_disabled(body)
+    assert "The form still matches this preset." in body
+    assert "disabled" in _control(body, "preset-update-button")
+    # Saving it again under another name is refused for the same reason.
+    assert "disabled" in _control(body, "preset-save-name")
 
 
-def test_saving_choices_that_are_already_saved_is_refused_by_name(
+def test_the_rail_is_not_shown_for_a_form_with_no_preset_behind_it(
     client, unlocked, presets_file
 ):
+    presets.save(SAMPLE)
+    body = client.get("/create").text
+    # The list is there, the difference panel is not: nothing to differ from.
+    assert 'id="preset-rail"' in body
+    assert "hidden" in _control(body, "preset-changes")
+
+
+def test_the_difference_is_listed_field_by_field():
+    """The rail's own arithmetic, which the browser repeats after each edit."""
+    changes = _preset_diff(
+        {
+            "profile": "desktop",
+            "server_type": "cx43",
+            "location": "nbg1",
+            "image_custom": "ubuntu-24.04",
+            "server_types_live": True,
+            "images_live": False,
+        },
+        SAMPLE,
+    )
+
+    assert changes == [
+        {"field": "Size", "was": "cx33", "now": "cx43"},
+        {"field": "Size list", "was": "built-in", "now": "live"},
+    ]
+
+
+def test_a_form_that_still_matches_its_preset_differs_in_nothing():
+    assert (
+        _preset_diff(
+            {
+                "profile": "desktop",
+                "server_type": "cx33",
+                "location": "nbg1",
+                "image_custom": "ubuntu-24.04",
+            },
+            SAMPLE,
+        )
+        == []
+    )
+
+
+def test_update_writes_the_current_choices_over_the_preset(client, unlocked, presets_file):
+    presets.save(SAMPLE)
+
+    response = client.post(
+        "/presets/dev-desktop/update",
+        data={
+            "profile": "basic",
+            "server_type": "cx43",
+            "location": "fsn1",
+            "image_select": "ubuntu-22.04",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Preset dev-desktop updated." in response.text
+    saved = presets.get("dev-desktop")
+    assert (saved.profile, saved.server_type, saved.location, saved.image) == (
+        "basic",
+        "cx43",
+        "fsn1",
+        "ubuntu-22.04",
+    )
+    # Still one preset: update writes over, it does not add.
+    assert len(presets.list_presets()) == 1
+
+
+def test_update_validates_exactly_as_saving_does(client, unlocked, presets_file):
+    presets.save(SAMPLE)
+
+    response = client.post("/presets/dev-desktop/update", data={"profile": "desktop"})
+
+    assert response.status_code == 400
+    assert 'class="banner banner-error"' in response.text
+    assert presets.get("dev-desktop").server_type == "cx33"
+
+
+def test_update_refuses_a_preset_that_is_not_there(client, unlocked, presets_file):
+    response = client.post(
+        "/presets/ghost/update",
+        data={
+            "profile": "basic",
+            "server_type": "cx23",
+            "location": "fsn1",
+            "image_select": "ubuntu-24.04",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "No preset named ghost" in response.text
+
+
+def test_saving_choices_that_are_already_saved_is_refused_by_name(client, unlocked, presets_file):
     """Not only for the preset that was loaded: the same choices reached by
     hand and offered under a different name are the same preset."""
     presets.save(SAMPLE)
@@ -131,19 +215,17 @@ def test_saving_choices_that_are_already_saved_is_refused_by_name(
 
     assert response.status_code == 409
     assert "already saved as" in response.text
-    assert "dev-desktop" in response.text
     assert [preset.name for preset in presets.list_presets()] == ["dev-desktop"]
 
 
-def test_a_preset_saved_from_the_defaults_matches_the_default_form(
+def test_a_preset_matching_the_default_form_disables_saving_on_arrival(
     client, unlocked, presets_file
 ):
-    first_size = next(iter(config.SERVER_TYPES))
     presets.save(
         presets.Preset(
             name="stock",
             profile=next(iter(config.PROFILES)),
-            server_type=first_size,
+            server_type=next(iter(config.SERVER_TYPES)),
             location=next(iter(config.LOCATIONS)),
             image=config.UBUNTU_LTS_IMAGES[0]["value"],
         )
@@ -151,5 +233,5 @@ def test_a_preset_saved_from_the_defaults_matches_the_default_form(
 
     body = client.get("/create").text
 
-    assert '<option value="stock" selected>' in body
     assert "These choices are already saved as" in body
+    assert "disabled" in _control(body, "preset-save-button")
