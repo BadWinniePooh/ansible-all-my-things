@@ -294,14 +294,21 @@ def machine_names_by_month(
     }
 
 
-def hourly_now(*, database: Path | None = None) -> float | None:
-    """What the machines still running are costing per hour, together.
+def hourly_of(running: list[Life]) -> float | None:
+    """What these machines cost per hour, together.
 
     None when nothing is running, which is different from €0.00 an hour --
     and different again from a machine whose location the account did not
     price, which contributes nothing and is named on the costs screen.
+
+    Taking the list rather than reading it lets a caller that already has
+    the open rows -- the shell, on every single page -- answer both the
+    count and the rate from one read.
     """
-    running = open_lives(database=database)
     if not running:
         return None
     return sum(life.rates.hourly or 0.0 for life in running)
+
+
+def hourly_now(*, database: Path | None = None) -> float | None:
+    return hourly_of(open_lives(database=database))

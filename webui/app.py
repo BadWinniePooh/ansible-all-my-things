@@ -67,9 +67,11 @@ def _shell_context(request: Request) -> dict:
     # from the ledger, which holds what the account last reported, so no
     # page render costs an API call to draw a badge; the local records
     # answer before the account has ever been read.
+    running = costs.open_lives()
     return {
         **secret_store.status(session_id),
-        "machine_count": len(costs.open_lives()) or len(inventory.list_machines()),
+        "machine_count": len(running) or len(inventory.list_machines()),
+        "machine_hourly": costs.hourly_of(running),
     }
 
 
@@ -170,12 +172,15 @@ def _server_names(servers: list[dict]) -> list[str]:
     return [name for name in (server.get("name") for server in servers) if name]
 
 
-def _spark(points: list[float], *, width: float = 300, height: float = 62) -> dict[str, str]:
+def _spark(points: list[float], *, width: float = 300, height: float = 44) -> dict[str, str]:
     """A sparkline as two paths: the line, and the area under it.
 
     Computed here rather than in the template because a chart is
     arithmetic, and Jinja is a bad place to do arithmetic. A flat run of
     months sits on the baseline rather than dividing by a zero range.
+
+    The box is drawn wide and shallow because it is scaled uniformly to the
+    card's width: a taller box would grow the card as the window widens.
     """
     if not points:
         return {"line": "", "area": "", "last_x": "0", "last_y": "0"}

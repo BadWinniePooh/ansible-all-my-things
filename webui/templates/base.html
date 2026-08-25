@@ -112,10 +112,15 @@
         The machine count belongs beside the lock states rather than on the
         dashboard alone: it is the same kind of fact about this
         installation, and it is as true on the vault screen as on the
-        dashboard.
+        dashboard. The rate rides along in the badge's right-hand slot, the
+        same place the lock badges put their state -- a fact worth having
+        in the corner of the eye rather than a figure worth a section.
       #}
       <span class="status-badge {{ 'ok' if machine_count else 'cancelled' }}">
         {{ machine_count }} machine{{ '' if machine_count == 1 else 's' }}
+        {% if machine_hourly %}
+        <span class="spacer"></span><span class="state">{{ machine_hourly | euro_rate }}</span>
+        {% endif %}
       </span>
       <div id="session-status" class="sidebar-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
         {% include "fragments/session_status.html" %}

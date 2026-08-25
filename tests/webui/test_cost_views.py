@@ -173,7 +173,10 @@ def test_the_dashboard_carries_the_bill_beside_the_name_pool(client, unlocked, t
 
     assert 'id="cost-card"' in body
     assert "this month so far" in body
-    assert "running now" in body
+    # The hourly rate is not here: it rides in the sidebar badge, where it
+    # is a fact in the corner of the eye rather than a figure competing
+    # with the month's total.
+    assert "running now" not in body
     # The card is in the row with the pool, not a section of its own.
     row = body.split('<div class="columns">')[1]
     assert 'id="cost-card"' in row
@@ -185,6 +188,16 @@ def test_the_sidebar_counts_the_machines_on_every_page(client, unlocked, two_mac
         body = client.get(path).text
         foot = body.split('class="sidebar-foot"')[1].split("</div>")[0]
         assert "2 machines" in foot, path
+        # ...and what they are costing while they run.
+        assert "/h" in foot, path
+
+
+def test_the_badge_carries_no_rate_when_nothing_is_running(client, ledger):
+    body = client.get("/").text
+    foot = body.split('class="sidebar-foot"')[1].split("</div>")[0]
+
+    assert "0 machines" in foot
+    assert "/h" not in foot
 
 
 def test_the_count_reads_as_one_machine_when_there_is_one(client, ledger):

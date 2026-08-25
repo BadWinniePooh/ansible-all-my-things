@@ -204,11 +204,16 @@ the first of the month, beside when it was created, and refreshes itself every
 minute.
 
 **The dashboard card** carries two figures — spent so far this month, and a
-projection for month end that assumes nothing is created or destroyed — plus
-what the running machines cost per hour together, and a six-month sparkline.
-*All months* leads to the costs screen, which splits the current month per
-machine (including the ones already destroyed, shaded) and lists every month the
-ledger knows about.
+projection for month end that assumes nothing is created or destroyed — over a
+six-month sparkline. *All months* leads to the costs screen, which splits the
+current month per machine (including the ones already destroyed, shaded) and
+lists every month the ledger knows about.
+
+**What the running machines cost per hour rides in the sidebar badge**, beside
+the machine count and above the two lock states — *2 machines · €0.023/h*. It
+belongs in the corner of the eye rather than in a section of its own, and it is
+as true on the vault screen as on the dashboard. No machines running means no
+rate: €0.00/h would read as "these are free".
 
 **Machines that no longer exist still count.** The account forgets a server the
 moment it is destroyed, but the invoice does not, so the interface keeps its own
