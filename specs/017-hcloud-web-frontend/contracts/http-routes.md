@@ -52,6 +52,9 @@ requires a second confirmation before replacing it.
 | Method | Path | Requires | Purpose |
 |---|---|---|---|
 | `GET` | `/create` | — | Create form: profile, server size, location, image, plus preset controls |
+| `GET` | `/create/server-types` | — (token for live sizes) | Fragment: the server-size table, plus the location fieldset out of band |
+| `GET` | `/create/locations` | — (token for live sizes) | Fragment: the location fieldset scoped to one server size |
+| `GET` | `/create/images` | — (token for the live catalogue) | Fragment: the operating-system image options |
 | `POST` | `/create/preview` | — | Fragment: the exact command that would run, without running it |
 | `POST` | `/create` | token + vault password | Start a provisioning run |
 | `POST` | `/machines/{name}/configure` | token + vault password | Start a configuration run against one machine |
@@ -62,6 +65,53 @@ explanation when a run is already active (FR-035).
 
 `POST /machines/{name}/destroy` refuses when the submitted confirmation does not match the
 machine name exactly.
+
+### Create-form fragments
+
+The create form renders the built-in size, location and image lists on every
+fresh load. The three `GET` fragment routes above back its interactive parts;
+none of them mutates anything, which is why they are `GET` under the
+no-`GET`-mutates rule below.
+
+| Route | Query parameters | Returns |
+|---|---|---|
+| `/create/server-types` | `server_types_live`, `server_type`, `location` | `#server-types-table`, followed by `#location-fieldset` carrying `hx-swap-oob="true"` |
+| `/create/locations` | `server_type`, `location`, `server_types_live` | `#location-fieldset` |
+| `/create/images` | `images_live`, `image` | `#image-options` |
+
+`server_types_live` and `images_live` carry the state of the two "show
+everything from Hetzner" toggles on the form. When either is set, the account's
+own catalogue is queried; otherwise the built-in lists are returned without any
+API call.
+
+A live lookup never fails the request. When the token is locked, when the API
+call errors, or when it returns nothing usable, the built-in list is returned
+with a notice stating which of the three happened. Live sizes are restricted to
+non-deprecated x86 types, since the image list this interface offers is x86-only.
+
+A server size is orderable only in the locations its own price entries name, so
+the two fieldsets are not independent: selecting a size refreshes the location
+list, and `/create/server-types` refreshes it out of band because toggling the
+source can change which size is selected. The size table shows the cheapest
+monthly price across a size's locations, labelled as a "from" figure.
+
+`server_types_live` is also submitted with the form, so `POST /create`,
+`POST /create/preview` and `POST /presets` validate against the same catalogue
+the user was looking at and a live-only size is not mistaken for an unknown one.
+
+### Create-form validation
+
+`POST /create`, `POST /create/preview` and `POST /presets` share one validation
+step. A submission is refused, naming the field at fault, when the profile,
+server size or location is missing or unknown, when no image is given, or when
+the chosen size cannot be ordered in the chosen location. No hardcoded default
+is ever substituted for a missing choice (Principle XII). `POST /create`
+re-renders the form with the submitted choices intact; `POST /create/preview`
+returns the message in place of a command.
+
+The image field accepts free text by design, so it is checked for presence
+only — an unrecognised name is the user's own choice and Hetzner rejects it by
+name if it does not exist.
 
 ## Runs
 
@@ -95,8 +145,15 @@ entry that appears in the machine records.
 | `GET` | `/presets` | — | List with rename and delete controls |
 | `POST` | `/presets` | — | Save the current create-form choices under a name |
 | `POST` | `/presets/{name}/delete` | — | Delete one preset |
+| `POST` | `/presets/{name}/rename` | — | Rename one preset |
 
-Saving over an existing name requires confirmation.
+Saving under a name that is already taken is refused rather than silently
+overwritten; the form offers no confirm-and-overwrite step, so the existing
+preset must be renamed or deleted first. Renaming onto a taken name is refused
+for the same reason.
+
+`POST /presets` runs the same validation as `POST /create`, so a preset cannot
+record a choice the user did not make.
 
 ## Defaults refresh
 

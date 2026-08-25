@@ -57,6 +57,50 @@ default files the user has not hand-edited, and never touches the encrypted
 configuration, machine records, name pool or presets (spec.md FR-047,
 FR-048).
 
+## The create screen
+
+Four choices make a machine: a profile (`basic` or `desktop`), a server size,
+a location, and an operating system image. The screen opens on the built-in
+lists — three sizes, six locations, the current Ubuntu LTS releases — which
+need no Hetzner account to display and are enough for the common case.
+
+**Size and location are coupled.** A Hetzner server size can only be ordered
+in the locations it is actually priced in, so selecting a size refreshes the
+location list to what that size offers. Picking the location first and the
+size second can therefore change the location under you; the form always shows
+a valid pair.
+
+**Two toggles widen the choice.** *Show all sizes available from Hetzner* and
+*Show full image catalogue from Hetzner* query the account itself. Both need
+the API token unlocked on the dashboard; without it, the built-in lists stay
+on screen with a note saying why. The same note appears, naming the cause, if
+the lookup fails or comes back empty — a live lookup never blocks the screen.
+
+Live sizes are limited to current x86 types. Deprecated sizes are dropped, and
+so are the arm64 (`cax`) ones, which cannot boot the x86 images this interface
+offers.
+
+**The price column is a "from" figure.** A size can cost different amounts in
+different locations, so the table shows the cheapest one across the locations
+that size is available in — not the price in the location currently selected.
+
+**The size table sorts.** Click any column header to sort by it; click again
+to reverse. Sorting is display-only and never changes the selection.
+
+**Nothing is guessed for you.** A submission missing a profile, size, location
+or image is refused with a message naming the field, as is a size paired with
+a location it cannot be ordered in. The interface never silently substitutes a
+default for a choice that was not made — including when saving a preset, which
+would otherwise hand the wrong choice back on every later load of it.
+
+The image list has an *Other* free-text field for anything not listed, such as
+`debian-12`. What is typed there wins over the selected radio option, and it is
+passed through as given: an image name Hetzner does not know fails during the
+run, not on this screen.
+
+*Preview command* renders the exact `ansible-playbook` invocation the current
+choices produce, without running anything.
+
 ## What the interface does not support
 
 Matching the feature's scope

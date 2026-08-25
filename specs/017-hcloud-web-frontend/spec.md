@@ -478,12 +478,22 @@ planning.
   discarded when the tool stops.
 - **Destruction requires typing the machine's name** to confirm, since it is irreversible
   and the list rows sit close together.
-- **Operating system image list comes from a live Hetzner API lookup (`GET /images`,
-  `type=system`) once the token is unlocked, plus a free-text field.** Revised
+- **The image and server-size lists are built-in by default, with an opt-in live
+  Hetzner lookup behind a toggle on each, plus a free-text image field.** Revised
   post-implementation, at user request, from the original "static Ubuntu LTS list, no
-  live lookup" design. Before the token is unlocked -- or if the live lookup fails --
-  the form falls back to a short built-in Ubuntu LTS list, so the create form still
-  works with no token entered.
+  live lookup" design. The create form opens on a short built-in Ubuntu LTS list and
+  the three built-in server sizes, so it works with no token entered; a per-list
+  toggle queries the account itself (`GET /images` with `type=system`, and
+  `GET /server_types`). A live lookup that cannot run -- token locked, API error, or
+  an empty result -- falls back to the built-in list with a notice naming the cause,
+  never an error page. Live sizes are limited to non-deprecated x86 types, since the
+  image list is x86-only.
+- **A server size is offered only in the locations it is priced in.** `GET
+  /server_types` has no per-type location field; each type's `prices` array is the
+  only source for where it can be ordered, and the cheapest of those prices is what
+  the size table shows, labelled as a "from" figure. Selecting a size therefore
+  narrows the location list, and a size/location pair the account cannot order is
+  refused before any provisioning starts.
 - **Dry-run mode is out of scope** for this version.
 - **A single instance serves a single user at a time.** The one-active-run rule is a
   correctness requirement, not a scaling limitation to be engineered around.
