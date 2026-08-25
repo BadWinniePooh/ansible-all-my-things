@@ -79,11 +79,11 @@ def _name_of(value: object) -> str | None:
 def _location_of(server: dict) -> str | None:
     """The location code, wherever this response happens to carry it.
 
-    Documented shape is datacenter.location.name ("nbg1"). A response that
-    reports the location at the top level is read the same way, and a
-    datacenter without a location block still answers with its own name
-    ("nbg1-dc3") -- which names the right place, and is a better answer
-    than "unknown".
+    GET /servers answers with the location at the top level and no
+    datacenter key at all, which is where this reads it from. The
+    documented datacenter.location.name is read too, and a datacenter with
+    no location block still answers with its own name ("nbg1-dc3") --
+    which names the right place, and is a better answer than "unknown".
     """
     datacenter = server.get("datacenter")
     for candidate in (

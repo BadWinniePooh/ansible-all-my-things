@@ -188,3 +188,82 @@ def test_a_name_the_account_does_not_know_is_reported_with_what_it_does(
 
     assert "The Hetzner account has no server named edoras" in body
     assert "edoras-old" in body
+
+
+# One server as GET /servers actually answers it, trimmed of the fields the
+# interface does not read. Note what is *not* here: no "datacenter" key at
+# all -- the location is reported at the top level, which is what the
+# first version of the merge missed and read as "unknown".
+REAL_RESPONSE = {
+    "id": 163550810,
+    "name": "mordor",
+    "status": "running",
+    "server_type": {
+        "id": 114,
+        "name": "cx23",
+        "architecture": "x86",
+        "cores": 2,
+        "disk": 40,
+        "memory": 4,
+        "locations": [{"id": 1, "name": "fsn1"}, {"id": 3, "name": "hel1"}],
+    },
+    "location": {
+        "id": 3,
+        "name": "hel1",
+        "description": "Helsinki DC Park 1",
+        "city": "Helsinki",
+        "country": "FI",
+        "network_zone": "eu-central",
+    },
+    "image": {"id": 387894169, "name": "ubuntu-26.04", "description": "Ubuntu 26.04"},
+    "public_net": {
+        "ipv4": {"id": 146490926, "ip": "204.168.148.135", "blocked": False},
+        "ipv6": {"id": 146490927, "ip": "2a01:4f9:c013:2b89::/64", "blocked": False},
+    },
+}
+
+
+def test_a_real_server_response_fills_in_every_column(client, unlocked, monkeypatch):
+    monkeypatch.setattr(
+        inventory,
+        "list_machines",
+        lambda **kwargs: [
+            inventory.Machine(
+                name="mordor", address=None, profile="basic", server_type=None, location=None
+            )
+        ],
+    )
+    monkeypatch.setattr(hcloud_api, "list_servers", lambda token: [REAL_RESPONSE])
+
+    body = client.get("/").text
+
+    assert "204.168.148.135" in body
+    assert "cx23" in body
+    assert "hel1 · Helsinki, Finland" in body
+    assert "unknown" not in body
+
+
+def test_list_servers_stops_when_the_account_says_there_is_no_next_page(monkeypatch):
+    """The response's own pagination decides, not a guess at how many
+    servers an account holds."""
+    calls = []
+
+    class Response:
+        is_success = True
+
+        def json(self):
+            return {
+                "servers": [REAL_RESPONSE],
+                "meta": {"pagination": {"page": 1, "next_page": None, "total_entries": 1}},
+            }
+
+    def get(url, headers=None, params=None, timeout=None):
+        calls.append(params)
+        return Response()
+
+    monkeypatch.setattr(hcloud_api.httpx, "get", get)
+
+    servers = hcloud_api.list_servers("token")
+
+    assert [server["name"] for server in servers] == ["mordor"]
+    assert len(calls) == 1
