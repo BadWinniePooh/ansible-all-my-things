@@ -1,18 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Name pool — Hetzner web frontend{% endblock %}
+{% set active = 'pool' %}
+{% block title %}Name pool — Steward{% endblock %}
+{% block heading %}Name pool{% endblock %}
 {% block content %}
 
-<h1>Machine name pool</h1>
-<p>{{ free | length }} free, {{ used | length }} used, {{ entries | length }} total.</p>
-<p>
+<p class="page-note">
   One name per line. Order determines which name a new machine receives — the first free
   name in order. A name currently used by a live machine cannot be removed or renamed.
 </p>
 
-<form method="post" action="/pool">
-  <textarea name="entries" rows="15" cols="40">{% for entry in entries %}{{ entry }}
+<div class="columns">
+
+  <section>
+    <h2>Pool</h2>
+    <div class="card-body">
+      <form method="post" action="/pool" class="card-body" style="padding: 0">
+        <textarea name="entries" rows="15" spellcheck="false">{% for entry in entries %}{{ entry }}
 {% endfor %}</textarea>
-  <button type="submit">Save</button>
-</form>
+        <div class="form-actions">
+          <button class="btn-primary" type="submit">Save</button>
+          <span class="helper">The whole list is validated before anything is written.</span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section>
+      <h2>Counts</h2>
+      <div class="card-body">
+        <span class="figure">
+          <span class="figure-value">{{ free | length }}</span>
+          <span class="figure-unit">free of {{ entries | length }}</span>
+        </span>
+        <span class="pool-next">{{ used | length }} in use.</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>In use</h2>
+      <div class="card-body">
+        {% if used %}
+        <div class="chips">
+          {% for entry in used %}
+          <span class="chip-name is-used">{{ entry }}</span>
+          {% endfor %}
+        </div>
+        <span class="helper">Protected: removing or renaming one of these is refused, naming the
+          machine that holds it.</span>
+        {% else %}
+        <p class="card-note">No name is held by a live machine right now.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section>
+      <h2>Next out</h2>
+      <div class="card-body">
+        {% if free %}
+        <div class="chips">
+          <span class="chip-name is-next">{{ free[0] }}</span>
+        </div>
+        <span class="helper">Move a line above it to hand that name out first instead.</span>
+        {% else %}
+        <p class="card-note">The pool is exhausted. Provisioning is refused until a name is freed
+           or added, because the automation claims a name before it calls Hetzner.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+</div>
 
 {% endblock %}

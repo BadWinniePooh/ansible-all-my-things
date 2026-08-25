@@ -1,42 +1,105 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Hetzner web frontend{% endblock %}
+{% set active = 'dashboard' %}
+{% block title %}Dashboard — Steward{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block topbar %}
+  {% if token_unlocked %}
+  <a class="btn btn-primary btn-sm" href="/create">Create VM</a>
+  {% else %}
+  <span class="status-badge locked">Session locked</span>
+  {% endif %}
+{% endblock %}
+{% block main_class %}{{ 'locked-main' if not token_unlocked }}{% endblock %}
 {% block content %}
+
+{% if not token_unlocked %}
+{#
+  FR: the machine list, provisioning and destroy all need the Hetzner API
+  token, so while it is locked the page is the unlock form and nothing
+  else -- rather than a list of actions that would all be refused.
+#}
+<div class="locked-col">
+
+  <h1>Unlock this session to continue</h1>
+  <p class="page-note">
+    Machines, provisioning and destroy stay hidden until the Hetzner API token is
+    unlocked. Neither value is stored: both are held in memory for as long as the
+    container runs, and are discarded on restart or after 30 minutes of inactivity.
+  </p>
+
+  <section>
+    <div class="card-body">
+      <form method="post" action="/session/unlock" class="card-body" style="padding: 0">
+        <label>
+          Hetzner API token
+          <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
+        </label>
+        <label>
+          Vault password
+          <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
+        </label>
+        <button class="btn-primary btn-block" type="submit">Unlock</button>
+      </form>
+      {% if not vault_configured %}
+      <p class="card-note">No configuration has been saved yet: the next password you enter here
+         becomes the vault password, and unlocks it from then on.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="reasons">
+    <div class="reason">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="10" cy="10" r="7.25"></circle>
+        <path d="M2.75 10h14.5M10 2.75c1.9 2 2.9 4.4 2.9 7.25S11.9 15.25 10 17.25C8.1 15.25 7.1 12.85 7.1 10S8.1 4.75 10 2.75Z"></path>
+      </svg>
+      <div>
+        <strong>The API token</strong>
+        <span>Provisioning, destroying, and the live server-size and image lookups on the create screen.</span>
+      </div>
+    </div>
+    <div class="reason">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3.5" y="8.5" width="13" height="9" rx="2.5"></rect>
+        <path d="M6.75 8.5V6.25a3.25 3.25 0 0 1 6.5 0V8.5"></path>
+      </svg>
+      <div>
+        <strong>The vault password</strong>
+        <span>Reading and editing the encrypted configuration, and every run that configures a machine.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% else %}
 
 {% if defaults_refresh_available %}
 <div class="banner banner-notice">
-  A newer image is running than the one this installation was seeded with.
-  <form method="post" action="/defaults/refresh" style="display:inline">
-    <button type="submit">Refresh defaults</button>
+  <div>
+    A newer image is running than the one this installation was seeded with.
+    <span class="banner-note">Your configuration, machine records, name pool and presets are never touched by this.</span>
+  </div>
+  <form method="post" action="/defaults/refresh">
+    <button class="btn-sm" type="submit">Refresh defaults</button>
   </form>
-  Your configuration, machine records, name pool and presets are never touched by this.
 </div>
 {% endif %}
 
-<section>
-  <h1>Unlock this session</h1>
-  <p>
-    Neither value is stored. Both are held in memory for as long as the container runs,
-    and are discarded on restart or after 30 minutes of inactivity.
-  </p>
-  <form method="post" action="/session/unlock">
-    <label>
-      Hetzner API token
-      <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
-    </label>
-    <label>
-      Vault password
-      <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
-    </label>
-    {% if not vault_configured %}
-    <p><small>No configuration has been saved yet: the next password you enter here becomes
-       the vault password, and unlocks it from then on.</small></p>
-    {% endif %}
-    <button type="submit">Unlock</button>
-  </form>
-</section>
+{% if not vault_unlocked %}
+<p class="banner banner-notice">
+  The vault password is still locked, so configuring and destroying are refused.
+  <a href="#unlock-session">Unlock it below.</a>
+</p>
+{% endif %}
+
+<p class="page-note">
+  Provision, configure and destroy Hetzner Cloud machines by driving this repository's
+  own playbooks. One run at a time.
+</p>
 
 <section>
-  <h1>Machines</h1>
+  <h2>Machines</h2>
   {% if machines %}
   <table>
     <thead>
@@ -46,38 +109,87 @@
         <th>Profile</th>
         <th>Server size</th>
         <th>Location</th>
-        <th>Actions</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
       {% for machine in machines %}
       <tr>
-        <td>{{ machine.name }}</td>
-        <td>{{ machine.address or "unknown" }}</td>
-        <td>{{ machine.profile or "unknown" }}</td>
-        <td>{{ machine.server_type or "unknown" }}</td>
-        <td>{{ machine.location or "unknown" }}</td>
+        <td><span class="machine-name">{{ machine.name }}</span></td>
+        <td class="mono muted">{{ machine.address or "unknown" }}</td>
+        <td><span class="tag">{{ machine.profile or "unknown" }}</span></td>
+        <td class="mono">{{ machine.server_type or "unknown" }}</td>
+        <td class="muted">
+          {{ machine.location or "unknown" }}{{ " · " ~ locations[machine.location] if machine.location in locations }}
+        </td>
         <td>
-          <form method="post" action="/machines/{{ machine.name }}/configure">
-            <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Configure</button>
-          </form>
-          <form method="post" action="/machines/{{ machine.name }}/destroy">
-            <input type="text" name="confirm_name" placeholder="type '{{ machine.name }}' to confirm" required>
-            <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Destroy</button>
-          </form>
+          <div class="row-actions">
+            <form method="post" action="/machines/{{ machine.name }}/configure">
+              <button class="btn-sm" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Configure</button>
+            </form>
+            <form method="post" action="/machines/{{ machine.name }}/destroy">
+              <input type="text" name="confirm_name" placeholder="type '{{ machine.name }}' to confirm" required>
+              <button class="btn-sm btn-critical" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Destroy</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p>No machines yet. <a href="/create">Provision one.</a></p>
+  <div class="card-body">
+    <p class="card-note">No machines yet. <a href="/create">Provision one.</a></p>
+  </div>
   {% endif %}
 </section>
 
 <section>
-  <h1>Name pool</h1>
-  <p>{{ pool_free | length }} free, {{ pool_used | length }} used. <a href="/pool">Manage the pool.</a></p>
+  <h2>Name pool</h2>
+  <div class="card-body">
+    <div class="pool-summary">
+      <span class="figure">
+        <span class="figure-value">{{ pool_free | length }}</span>
+        <span class="figure-unit">names free of {{ pool_entries | length }}</span>
+      </span>
+      {% if pool_next %}
+      <span class="pool-next">Next machine takes <span class="mono">{{ pool_next }}</span>, the first free name in order.</span>
+      {% else %}
+      <span class="pool-next">The pool is exhausted, so provisioning is refused until a name is freed or added.</span>
+      {% endif %}
+    </div>
+    <div class="chips">
+      {% for entry in pool_entries %}
+      <span class="chip-name {{ 'is-used' if entry in pool_used }}{{ 'is-next' if entry == pool_next }}">{{ entry }}</span>
+      {% endfor %}
+    </div>
+    <p class="card-note"><a href="/pool">Manage the pool.</a></p>
+  </div>
 </section>
+
+<section id="unlock-session">
+  <h2>Session</h2>
+  <div class="card-body">
+    <p class="card-note">
+      Neither value is stored. Both are held in memory for as long as the container runs,
+      and are discarded on restart or after 30 minutes of inactivity.
+    </p>
+    <form method="post" action="/session/unlock" class="form-grid">
+      <label>
+        Hetzner API token
+        <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
+      </label>
+      <label>
+        Vault password
+        <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
+      </label>
+      <div class="form-actions">
+        <button class="btn-primary" type="submit">Unlock</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+{% endif %}
 
 {% endblock %}

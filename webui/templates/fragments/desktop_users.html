@@ -1,28 +1,36 @@
-<div id="desktop-users">
+<section id="desktop-users">
   <h2>Desktop users</h2>
-  <p>At least one is required.</p>
-  {% for user in desktop_users %}
-  <fieldset>
-    <label>Name <input type="text" name="desktop_user_name" value="{{ user.name }}"></label>
-    <label>Password <input type="password" name="desktop_user_password" value="{{ user.password }}"></label>
-    <label>Exa API key <input type="text" name="desktop_user_exa_api_key" value="{{ user.exa_api_key }}"></label>
-    <button
-      type="button"
-      hx-post="/vault/users"
-      hx-include="closest form"
-      hx-vals='{"action": "remove", "index": "{{ loop.index0 }}"}'
-      hx-target="#desktop-users"
-      hx-swap="outerHTML"
-      {{ 'disabled' if desktop_users | length <= 1 }}
-    >Remove</button>
-  </fieldset>
-  {% endfor %}
-  <button
-    type="button"
-    hx-post="/vault/users"
-    hx-include="closest form"
-    hx-vals='{"action": "add"}'
-    hx-target="#desktop-users"
-    hx-swap="outerHTML"
-  >Add another user</button>
-</div>
+  <div class="card-body">
+    <p class="card-note">At least one is required.</p>
+    <div class="repeater">
+      {% for user in desktop_users %}
+      <fieldset>
+        <label>Name <input type="text" name="desktop_user_name" value="{{ user.name }}"></label>
+        <label>Password <input type="password" name="desktop_user_password" value="{{ user.password }}"></label>
+        <label>Exa API key <input type="text" name="desktop_user_exa_api_key" value="{{ user.exa_api_key }}"></label>
+        <button
+          class="btn-critical"
+          type="button"
+          hx-post="/vault/users"
+          hx-include="closest form"
+          hx-vals='{"action": "remove", "index": "{{ loop.index0 }}"}'
+          hx-target="#desktop-users"
+          hx-swap="outerHTML"
+          {{ 'disabled' if desktop_users | length <= 1 }}
+        >Remove</button>
+      </fieldset>
+      {% endfor %}
+    </div>
+    <div class="form-actions">
+      <button
+        type="button"
+        hx-post="/vault/users"
+        hx-include="closest form"
+        hx-vals='{"action": "add"}'
+        hx-target="#desktop-users"
+        hx-swap="outerHTML"
+      >Add another user</button>
+      <span class="helper">Removing is refused while only one user is left.</span>
+    </div>
+  </div>
+</section>

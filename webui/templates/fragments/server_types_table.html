@@ -1,6 +1,6 @@
 <div id="server-types-table">
   {% if notice %}
-  <p class="banner banner-notice">{{ notice }}</p>
+  <p class="banner banner-notice" style="margin: 0 18px 18px">{{ notice }}</p>
   {% endif %}
   <table class="sortable-table" data-sortable>
     <thead>
@@ -21,16 +21,16 @@
             hx-get="/create/locations" hx-trigger="change" hx-target="#location-fieldset" hx-swap="outerHTML"
             hx-include="closest form">
         </td>
-        <td>{{ value }}</td>
+        <td class="mono">{{ value }}</td>
         <td>{{ spec.vcpu }}</td>
         <td>{{ spec.memory_gb }}</td>
         <td>{{ spec.disk_gb }}</td>
-        <td>{{ spec.monthly_eur }}</td>
+        <td class="mono">{{ spec.monthly_eur }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% if not server_types %}
-  <p><small>No server sizes available.</small></p>
+  <p style="margin: 18px"><small>No server sizes available.</small></p>
   {% endif %}
 </div>

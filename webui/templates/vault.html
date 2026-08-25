@@ -1,52 +1,84 @@
 {% extends "base.html" %}
-{% block title %}Vault — Hetzner web frontend{% endblock %}
+{% set active = 'vault' %}
+{% block title %}Vault — Steward{% endblock %}
+{% block heading %}Vault{% endblock %}
 {% block content %}
 
-<h1>Configuration</h1>
-<p>
+<p class="page-note">
   Generated from the project's own configuration template, so it always matches what the
   automation expects. Stored encrypted at rest, readable only with your vault password.
 </p>
 
 {% if not vault_unlocked %}
-<p>Unlock the vault password on the <a href="/">dashboard</a> to view or edit this.</p>
+<section>
+  <div class="card-body">
+    <p class="card-note">Unlock the vault password on the <a href="/">dashboard</a> to view or edit this.</p>
+  </div>
+</section>
 {% else %}
-<form method="post" action="/vault">
-  <label>
-    Ansible user name
-    <input type="text" name="vault_my_ansible_user_name" value="{{ values.vault_my_ansible_user_name or '' }}">
-  </label>
+<form method="post" action="/vault" class="stack">
 
-  <label>
-    Ansible user password
-    <input id="pw-user" type="password" name="vault_my_ansible_user_password"
-           value="{{ values.vault_my_ansible_user_password or '' }}">
-    <button type="button" onclick="toggleReveal('pw-user')">Show</button>
-  </label>
+  <section>
+    <h2>Credentials</h2>
+    <div class="card-body">
+      <div class="form-grid">
+        <label>
+          Ansible user name
+          <input type="text" name="vault_my_ansible_user_name" value="{{ values.vault_my_ansible_user_name or '' }}">
+        </label>
 
-  <label>
-    GNOME keyring password
-    <input id="pw-keyring" type="password" name="vault_gnome_keyring_password"
-           value="{{ values.vault_gnome_keyring_password or '' }}">
-    <button type="button" onclick="toggleReveal('pw-keyring')">Show</button>
-  </label>
+        <label>
+          Ansible user password
+          <span class="form-actions">
+            <input id="pw-user" type="password" name="vault_my_ansible_user_password"
+                   value="{{ values.vault_my_ansible_user_password or '' }}">
+            <button class="btn-sm" type="button" onclick="toggleReveal('pw-user')">Show</button>
+          </span>
+        </label>
 
-  <label>
-    Windows administrator password <em>(not used — this interface is Hetzner Cloud/Linux only)</em>
-    <input id="pw-windows" type="password" name="vault_windows_admin_password"
-           value="{{ values.vault_windows_admin_password or '' }}">
-    <button type="button" onclick="toggleReveal('pw-windows')">Show</button>
-  </label>
+        <label>
+          GNOME keyring password
+          <span class="form-actions">
+            <input id="pw-keyring" type="password" name="vault_gnome_keyring_password"
+                   value="{{ values.vault_gnome_keyring_password or '' }}">
+            <button class="btn-sm" type="button" onclick="toggleReveal('pw-keyring')">Show</button>
+          </span>
+        </label>
 
-  <fieldset>
-    <legend>SSH key (managed — see <a href="/sshkey">SSH key</a>)</legend>
-    <label>Key name <input type="text" value="{{ values.vault_my_ssh_key_name or '(not generated yet)' }}" readonly></label>
-    <label>Public key <input type="text" value="{{ values.vault_my_ssh_public_key or '(not generated yet)' }}" readonly></label>
-  </fieldset>
+        <label>
+          Windows administrator password
+          <span class="form-actions">
+            <input id="pw-windows" type="password" name="vault_windows_admin_password"
+                   value="{{ values.vault_windows_admin_password or '' }}">
+            <button class="btn-sm" type="button" onclick="toggleReveal('pw-windows')">Show</button>
+          </span>
+          <small>Not used — this interface is Hetzner Cloud and Linux only.</small>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>SSH key</h2>
+    <div class="card-body">
+      <dl class="kv">
+        <dt>Key name</dt>
+        <dd class="mono">{{ values.vault_my_ssh_key_name or '(not generated yet)' }}</dd>
+        <dt>Public key</dt>
+        <dd class="mono">{{ values.vault_my_ssh_public_key or '(not generated yet)' }}</dd>
+      </dl>
+      <span class="helper">Managed for you, so neither field is editable here.
+        <a href="/sshkey">Generate or rotate the key.</a></span>
+    </div>
+  </section>
 
   {% include "fragments/desktop_users.html" %}
 
-  <button type="submit">Save</button>
+  <div class="form-actions">
+    <button class="btn-primary" type="submit">Save</button>
+    <span class="helper">Written back encrypted; the managed key name and public key are preserved.</span>
+  </div>
+
 </form>
 
 <script>

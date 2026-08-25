@@ -1,11 +1,14 @@
-<div id="image-options">
+<div id="image-options" class="choices">
   {% if notice %}
   <p class="banner banner-notice">{{ notice }}</p>
   {% endif %}
   {% for image in images %}
   <label>
     <input type="radio" name="image_select" value="{{ image.value }}" {{ 'checked' if image.value == selected.image }}>
-    {{ image.label }}{{ " (support ends " ~ image.support_end ~ ")" if image.support_end }}
+    <span>
+      <strong>{{ image.label }}</strong>
+      {% if image.support_end %}<span class="card-note">support ends {{ image.support_end }}</span>{% endif %}
+    </span>
   </label>
   {% endfor %}
 </div>

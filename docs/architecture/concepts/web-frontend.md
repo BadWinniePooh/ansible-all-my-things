@@ -22,4 +22,5 @@ The design and every functional requirement are specified in
 this page and its children are the durable, post-implementation summary.
 
 - [Using the web frontend](./web-frontend/usage.md)
+- [Appearance and colours](./web-frontend/appearance.md)
 - [Building and verifying the image](./web-frontend/build-test.md)

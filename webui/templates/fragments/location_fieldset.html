@@ -1,11 +1,15 @@
 <fieldset id="location-fieldset"{{ ' hx-swap-oob="true"' | safe if oob }}>
-  <legend>Location</legend>
-  {% for value, city in locations.items() %}
-  <label>
-    <input type="radio" name="location" value="{{ value }}" {{ 'checked' if value == selected.location }}>
-    <strong>{{ value }}</strong> — {{ city }}
-  </label>
-  {% endfor %}
+  <div class="choices-inline">
+    {% for value, city in locations.items() %}
+    <label>
+      <input type="radio" name="location" value="{{ value }}" {{ 'checked' if value == selected.location }}>
+      <span>
+        <strong class="mono">{{ city }}</strong>
+        <span class="card-note">{{ value }}</span>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
   {% if not locations %}
   <p><small>This server size has no orderable locations right now.</small></p>
   {% endif %}

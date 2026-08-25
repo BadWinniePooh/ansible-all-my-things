@@ -2,7 +2,7 @@
   {% if error %}
   <p class="banner banner-error">{{ error }}</p>
   {% else %}
-  <p><strong>This will run:</strong></p>
-  <pre class="run-output">{{ command | join(' ') }}</pre>
+  <p class="card-note">This will run:</p>
+  <pre class="command">{{ command | join(' ') }}</pre>
   {% endif %}
 </div>

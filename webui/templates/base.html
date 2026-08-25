@@ -3,36 +3,123 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Hetzner web frontend{% endblock %}</title>
+  <title>{% block title %}Steward — Hetzner web frontend{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js"></script>
   <script src="/static/sortable-table.js" defer></script>
   <script src="/static/image-choice.js" defer></script>
 </head>
+{#
+  One shell for every page: the sidebar carries navigation and the session
+  lock state, the content column carries a title bar and the page itself.
+  Children set `active` to the nav key they are, and may fill the heading
+  and topbar blocks.
+
+  token_unlocked and vault_unlocked reach this template through the
+  context processor in webui/app.py, so the padlocks below are correct on
+  every page rather than only on the ones that happen to pass them.
+#}
+{% set active = active | default('dashboard') %}
+{% set lock_icon %}
+  <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"
+       stroke-linecap="round" stroke-linejoin="round" aria-label="needs an unlocked session">
+    <rect x="4" y="9" width="12" height="8" rx="2"></rect>
+    <path d="M7 9V6.75a3 3 0 0 1 6 0V9"></path>
+  </svg>
+{% endset %}
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">Hetzner web frontend</a>
-    <nav>
-      <a href="/">Dashboard</a>
-      <a href="/create">Create VM</a>
-      <a href="/vault">Vault</a>
-      <a href="/sshkey">SSH key</a>
-      <a href="/pool">Name pool</a>
-      <a href="/presets">Presets</a>
+  <aside class="sidebar">
+    <a class="brand" href="/">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round" style="color: var(--c-accent)" aria-hidden="true">
+        <path d="M11 2.25 3.5 6.25v9.5L11 19.75l7.5-4V6.25z"></path>
+        <path d="M11 11 3.5 6.75M11 11l7.5-4.25M11 11v8.5"></path>
+      </svg>
+      <span class="brand-name">Steward<span class="brand-sub">Hetzner web frontend</span></span>
+    </a>
+
+    <nav class="nav">
+      <span class="nav-label">Machines</span>
+      <a href="/" {{ 'aria-current=page' | safe if active == 'dashboard' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="2.5" width="6.5" height="6.5" rx="1.5"></rect>
+          <rect x="11" y="2.5" width="6.5" height="6.5" rx="1.5"></rect>
+          <rect x="2.5" y="11" width="6.5" height="6.5" rx="1.5"></rect>
+          <rect x="11" y="11" width="6.5" height="6.5" rx="1.5"></rect>
+        </svg>
+        Dashboard
+      </a>
+      <a href="/create" class="{{ 'is-locked' if not (token_unlocked and vault_unlocked) }}" {{ 'aria-current=page' | safe if active == 'create' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="2.5" width="15" height="15" rx="3.5"></rect>
+          <path d="M10 6.75v6.5M6.75 10h6.5"></path>
+        </svg>
+        Create VM
+        {% if not (token_unlocked and vault_unlocked) %}<span class="spacer"></span>{{ lock_icon }}{% endif %}
+      </a>
+      <a href="/run" class="{{ 'is-locked' if not (token_unlocked and vault_unlocked) }}" {{ 'aria-current=page' | safe if active == 'run' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2.5" y="3.5" width="15" height="13" rx="2.5"></rect>
+          <path d="M6 8.25 8.25 10.5 6 12.75M10.75 13h3.5"></path>
+        </svg>
+        Run
+        {% if not (token_unlocked and vault_unlocked) %}<span class="spacer"></span>{{ lock_icon }}{% endif %}
+      </a>
+
+      <span class="nav-label">Configuration</span>
+      <a href="/vault" class="{{ 'is-locked' if not vault_unlocked }}" {{ 'aria-current=page' | safe if active == 'vault' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3.5" y="8.5" width="13" height="9" rx="2.5"></rect>
+          <path d="M6.75 8.5V6.25a3.25 3.25 0 0 1 6.5 0V8.5"></path>
+        </svg>
+        Vault
+        {% if not vault_unlocked %}<span class="spacer"></span>{{ lock_icon }}{% endif %}
+      </a>
+      <a href="/sshkey" class="{{ 'is-locked' if not (token_unlocked and vault_unlocked) }}" {{ 'aria-current=page' | safe if active == 'sshkey' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="7" cy="7" r="3.75"></circle>
+          <path d="m9.75 9.75 6.5 6.5M13.5 13.5l1.75-1.75M15.5 15.5l1.5-1.5"></path>
+        </svg>
+        SSH key
+        {% if not (token_unlocked and vault_unlocked) %}<span class="spacer"></span>{{ lock_icon }}{% endif %}
+      </a>
+      <a href="/pool" {{ 'aria-current=page' | safe if active == 'pool' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 5.5h10M7 10h10M7 14.5h10"></path>
+          <path d="M3.25 5.5h.01M3.25 10h.01M3.25 14.5h.01"></path>
+        </svg>
+        Name pool
+      </a>
+      <a href="/presets" {{ 'aria-current=page' | safe if active == 'presets' }}>
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3.5 6h13M3.5 14h13"></path>
+          <circle cx="8" cy="6" r="2.25"></circle>
+          <circle cx="13" cy="14" r="2.25"></circle>
+        </svg>
+        Presets
+      </a>
     </nav>
-    <div id="session-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
+
+    <div class="sidebar-foot" id="session-status" hx-get="/session/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
       {% include "fragments/session_status.html" %}
     </div>
-  </header>
+  </aside>
 
-  <main>
-    {% if error %}
-    <p class="banner banner-error">{{ error }}</p>
-    {% endif %}
-    {% if notice %}
-    <p class="banner banner-notice">{{ notice }}</p>
-    {% endif %}
-    {% block content %}{% endblock %}
-  </main>
+  <div class="content">
+    <header class="topbar">
+      <h1>{% block heading %}Dashboard{% endblock %}</h1>
+      {% block topbar %}{% endblock %}
+    </header>
+
+    <main class="{% block main_class %}{% endblock %}">
+      {% if error %}
+      <p class="banner banner-error">{{ error }}</p>
+      {% endif %}
+      {% if notice %}
+      <p class="banner banner-notice">{{ notice }}</p>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </body>
 </html>

@@ -1,30 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Run — Hetzner web frontend{% endblock %}
+{% set active = 'run' %}
+{% block title %}Run — Steward{% endblock %}
+{% block heading %}Run{% endblock %}
+{% block topbar %}
+  {% if command %}
+  <span id="run-outcome" class="run-state">
+    {% if outcome == 'running' %}running…{% else %}{{ outcome }}{% if exit_code is not none %} (exit {{ exit_code }}){% endif %}{% endif %}
+  </span>
+  {% endif %}
+{% endblock %}
 {% block content %}
 
-<h1>Run</h1>
-
 {% if not command %}
-<p>No run has started yet. <a href="/create">Provision a machine</a> to start one.</p>
+<section>
+  <div class="card-body">
+    <p class="card-note">No run has started yet. <a href="/create">Provision a machine</a> to start one.</p>
+  </div>
+</section>
 {% else %}
-<p><strong>Command:</strong></p>
-<pre class="run-output">{{ command | join(' ') }}</pre>
 
-<p id="run-outcome">
-  Outcome:
-  {% if outcome == 'running' %}running…{% else %}{{ outcome }}{% if exit_code is not none %} (exit {{ exit_code }}){% endif %}{% endif %}
-</p>
+<section>
+  <h2>Command</h2>
+  <div class="card-body">
+    <pre class="command">{{ command | join(' ') }}</pre>
+    <span class="helper">One run at a time. Neither secret is an argument, so this is the whole
+      command as it runs.</span>
+  </div>
+</section>
 
+<section>
+  <h2>Output</h2>
+  <div class="card-body">
+    {% if outcome == 'running' %}
+    <form method="post" action="/run/cancel">
+      <button class="btn-critical" type="submit">Cancel run</button>
+    </form>
+    {% endif %}
 <pre id="run-output" class="run-output">{% if outcome != 'running' %}{% for line in output %}{{ line }}
 {% endfor %}{% endif %}</pre>
 {# When running, the script below fills this in via SSE, which replays the
    ring buffer before switching to live lines -- pre-rendering here too
    would duplicate every already-buffered line. #}
+    <span class="helper">Output is streamed and held in memory only: it can echo decrypted
+      configuration values, so it is never written to disk.</span>
+  </div>
+</section>
 
 {% if outcome == 'running' %}
-<form method="post" action="/run/cancel">
-  <button type="submit">Cancel run</button>
-</form>
 <script>
 (function () {
   var outputEl = document.getElementById('run-output');
@@ -36,7 +58,7 @@
   };
   source.addEventListener('terminal', function (event) {
     var data = JSON.parse(event.data);
-    var text = 'Outcome: ' + data.outcome;
+    var text = data.outcome;
     if (data.exit_code !== null && data.exit_code !== undefined) {
       text += ' (exit ' + data.exit_code + ')';
     }

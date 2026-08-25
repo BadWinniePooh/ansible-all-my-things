@@ -43,6 +43,14 @@ disk, logged, or echoed into run output (spec.md FR-011, SC-005). Both are
 discarded when the container stops and after 30 minutes of inactivity;
 re-entering them is normal, not an error.
 
+**Unlocking is the first step, not an optional one.** While the API token is
+locked, the dashboard is the unlock form and nothing else: the machine list,
+provisioning and destroy all need that token, so showing them would only offer
+actions that are refused. Once it is unlocked the dashboard shows the machines
+and the name pool. The sidebar marks the same rule everywhere — Create VM, Run,
+Vault and SSH key carry a padlock until the secrets they need are present,
+while Name pool and Presets stay open because neither reads a secret.
+
 ## Persistent state
 
 A single named volume is mounted at `/ansible/inventories`. It holds the

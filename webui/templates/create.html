@@ -1,83 +1,121 @@
 {% extends "base.html" %}
-{% block title %}Create VM — Hetzner web frontend{% endblock %}
+{% set active = 'create' %}
+{% block title %}Create VM — Steward{% endblock %}
+{% block heading %}Create VM{% endblock %}
+{% block topbar %}
+  {% if presets %}
+  <div class="row-actions">
+    <span class="helper">Load a preset</span>
+    {% for preset in presets %}
+    <a class="btn btn-sm" href="/create?preset={{ preset.name }}">{{ preset.name }}</a>
+    {% endfor %}
+    <a class="helper" href="/presets">all presets</a>
+  </div>
+  {% endif %}
+{% endblock %}
 {% block content %}
 
-<h1>Create a machine</h1>
-
 {% if not (token_unlocked and vault_unlocked) %}
-<p>Provisioning requires both the Hetzner API token and the vault password to be unlocked
-   on the <a href="/">dashboard</a>.</p>
-{% endif %}
-
-{% if presets %}
-<p>
-  Load a saved preset:
-  {% for preset in presets %}
-  <a href="/create?preset={{ preset.name }}">{{ preset.name }}</a>{{ ", " if not loop.last }}
-  {% endfor %}
-  (see <a href="/presets">all presets</a>)
+<p class="banner banner-error">
+  Provisioning requires both the Hetzner API token and the vault password to be unlocked
+  on the <a href="/">dashboard</a>.
 </p>
 {% endif %}
 
-<form id="create-form" method="post" action="/create">
-  <fieldset>
-    <legend>Profile</legend>
-    {% for value, summary in profiles.items() %}
-    <label>
-      <input type="radio" name="profile" value="{{ value }}" {{ 'checked' if value == selected.profile }}>
-      <strong>{{ value }}</strong> — {{ summary }}
-    </label>
-    {% endfor %}
-  </fieldset>
+<form id="create-form" method="post" action="/create" class="stack">
 
-  <fieldset>
-    <legend>Server size</legend>
-    <label>
-      <input type="checkbox" name="server_types_live" value="1"
-        hx-get="/create/server-types" hx-trigger="change" hx-target="#server-types-table" hx-swap="outerHTML"
-        hx-include="closest form">
-      Show all sizes available from Hetzner (live lookup; requires an unlocked API token)
-    </label>
+  <section>
+    <h2>Profile</h2>
+    <div class="card-body">
+      <div class="choices">
+        {% for value, summary in profiles.items() %}
+        <label>
+          <input type="radio" name="profile" value="{{ value }}" {{ 'checked' if value == selected.profile }}>
+          <span>
+            <strong>{{ value }}</strong>
+            <span class="card-note">{{ summary }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Server size</h2>
+    <div class="card-body">
+      <label class="toggle-row">
+        <input type="checkbox" name="server_types_live" value="1"
+          hx-get="/create/server-types" hx-trigger="change" hx-target="#server-types-table" hx-swap="outerHTML"
+          hx-include="closest form">
+        Show all sizes available from Hetzner (live lookup; requires an unlocked API token)
+      </label>
+    </div>
     {% include "fragments/server_types_table.html" %}
-  </fieldset>
+  </section>
 
-  {% include "fragments/location_fieldset.html" %}
+  <section>
+    <h2>Location</h2>
+    <div class="card-body">
+      {% include "fragments/location_fieldset.html" %}
+    </div>
+  </section>
 
-  <fieldset>
-    <legend>Operating system image</legend>
-    <label>
-      <input type="checkbox" name="images_live" value="1"
-        hx-get="/create/images" hx-trigger="change" hx-target="#image-options" hx-swap="outerHTML"
-        hx-include="closest form">
-      Show full image catalogue from Hetzner (live lookup; requires an unlocked API token)
-    </label>
-    {% include "fragments/image_options.html" %}
-    <label>
-      Other (free text)
-      <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12"
-        hx-get="/create/validate-image" hx-trigger="input changed delay:500ms, change"
-        hx-target="#image-validation" hx-swap="outerHTML">
-    </label>
-    {% include "fragments/image_validation.html" %}
-  </fieldset>
+  <section>
+    <h2>Operating system image</h2>
+    <div class="card-body">
+      <label class="toggle-row">
+        <input type="checkbox" name="images_live" value="1"
+          hx-get="/create/images" hx-trigger="change" hx-target="#image-options" hx-swap="outerHTML"
+          hx-include="closest form">
+        Show full image catalogue from Hetzner (live lookup; requires an unlocked API token)
+      </label>
+      {% include "fragments/image_options.html" %}
+      <div class="divider"></div>
+      <label>
+        Other (free text)
+        <input type="text" name="image_custom" value="{{ selected.image_custom or '' }}" placeholder="e.g. debian-12"
+          hx-get="/create/validate-image" hx-trigger="input changed delay:500ms, change"
+          hx-target="#image-validation" hx-swap="outerHTML">
+      </label>
+      {% include "fragments/image_validation.html" %}
+      <span class="helper">A value here overrides the list above, which is dimmed while it does.
+        Clicking any entry in the list switches back.</span>
+    </div>
+  </section>
 
-  <button type="button" hx-post="/create/preview" hx-include="closest form" hx-target="#command-preview-wrap" hx-swap="innerHTML">
-    Preview command
-  </button>
-  <div id="command-preview-wrap"></div>
+  <section>
+    <h2>Before it runs</h2>
+    <div class="card-body">
+      <div class="form-actions">
+        <button type="button" hx-post="/create/preview" hx-include="closest form" hx-target="#command-preview-wrap" hx-swap="innerHTML">
+          Preview command
+        </button>
+        <span class="helper">Neither secret appears in it: both reach Ansible through the child
+          process environment, never the argument list.</span>
+      </div>
+      <div id="command-preview-wrap"></div>
+      <div class="divider"></div>
+      <div class="form-actions">
+        <button class="btn-primary" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Start provisioning</button>
+        <span class="helper">The machine takes the first free name in the pool.</span>
+      </div>
+    </div>
+  </section>
 
-  <button type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Start provisioning</button>
 </form>
 
-<form method="post" action="/presets" style="margin-top:1rem">
-  <label>
-    Save these choices as a preset
-    <input type="text" name="name" placeholder="preset name" required>
-  </label>
-  <button type="button" hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML">
-    Save preset
-  </button>
-  <div id="preset-save-result"></div>
-</form>
+<section>
+  <h2>Save these choices as a preset</h2>
+  <div class="card-body">
+    <form method="post" action="/presets" class="form-actions">
+      <input type="text" name="name" placeholder="preset name" required>
+      <button type="button" hx-post="/presets" hx-include="#create-form, [name='name']" hx-target="#preset-save-result" hx-swap="innerHTML">
+        Save preset
+      </button>
+    </form>
+    <div id="preset-save-result"></div>
+  </div>
+</section>
 
 {% endblock %}

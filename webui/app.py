@@ -37,7 +37,21 @@ app = FastAPI(title="Hetzner web frontend")
 
 _templates_dir = Path(__file__).parent / "templates"
 _static_dir = Path(__file__).parent / "static"
-templates = Jinja2Templates(directory=str(_templates_dir))
+
+
+def _shell_context(request: Request) -> dict:
+    """The session lock state the shell in base.html needs on every page.
+
+    The sidebar marks the actions a locked session cannot perform, so this
+    belongs to every response rather than to the handful of handlers that
+    happen to pass it. Routes that also compute it explicitly agree with
+    this by construction: both read the same store.
+    """
+    session_id = getattr(request.state, "session_id", None)
+    return secret_store.status(session_id)
+
+
+templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_shell_context])
 
 if _static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -77,8 +91,11 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         "error": error,
         "notice": notice,
         "machines": inventory.list_machines(),
+        "pool_entries": pool_status.entries,
         "pool_free": pool_status.free,
         "pool_used": pool_status.used,
+        "pool_next": pool_status.free[0] if pool_status.free else None,
+        "locations": config.LOCATIONS,
         "defaults_refresh_available": seed.needs_defaults_refresh(),
         "vault_configured": config.VAULT_FILE.exists(),
         **status,
