@@ -221,8 +221,31 @@ main {
 }
 .status-badge .spacer { flex: 1; }
 .status-badge .state { font-weight: 600; }
-.status-badge.unlocked { color: var(--c-positive); border-color: var(--positive-line); background: var(--positive-wash); }
-.status-badge.locked { color: var(--c-critical); border-color: var(--critical-line); background: var(--critical-wash); }
+/* One badge for every state the interface reports, whether it is a
+   secret's lock state or how a run ended: coloured box, coloured dot, the
+   state in words. The dot is ::before, so nothing has to be added to the
+   markup to get one. */
+.status-badge.unlocked,
+.status-badge.ok { color: var(--c-positive); border-color: var(--positive-line); background: var(--positive-wash); }
+.status-badge.locked,
+.status-badge.failed { color: var(--c-critical); border-color: var(--critical-line); background: var(--critical-wash); }
+.status-badge.running { color: var(--c-accent); border-color: var(--accent-line); background: var(--accent-wash); }
+.status-badge.cancelled { color: var(--text-muted); border-color: var(--border-strong); background: var(--surface-sunk); }
+
+/* A run that is still going turns the dot into a spinner in the same
+   place, so the badge does not change shape when it finishes. */
+.status-badge.running::before {
+  width: 11px;
+  height: 11px;
+  background: none;
+  border: 2px solid color-mix(in oklab, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .status-badge.running::before { animation-duration: 3s; }
+}
 
 /* ==========================================================================
    Controls
@@ -540,24 +563,6 @@ pre.run-output {
   margin: 0;
 }
 
-.run-state { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 500; }
-.run-ok { color: var(--c-positive); }
-.run-failed { color: var(--c-critical); }
-.run-cancelled { color: var(--text-muted); }
-
-.spinner {
-  width: 11px;
-  height: 11px;
-  border-radius: 999px;
-  border: 2px solid var(--accent-line);
-  border-top-color: var(--c-accent);
-  animation: spin 0.9s linear infinite;
-  flex: none;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .spinner { animation-duration: 3s; }
-}
 
 /* ==========================================================================
    Key/value facts, danger panel, repeater

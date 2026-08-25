@@ -80,19 +80,26 @@ def test_a_run_without_a_target_still_reads_as_a_sentence():
     assert runner_module.describe(make_run("provision", None))["label"] == "Provisioning a machine…"
 
 
-def test_the_run_view_shows_the_spinner_and_the_machine(client, active_run):
+def test_a_running_run_wears_the_running_badge(client, active_run):
     active_run(make_run("provision", "osgiliath"))
     body = client.get("/run").text
     assert "Provisioning osgiliath" in body
-    assert 'class="spinner"' in body
+    # The same badge the sidebar uses for a secret's lock state.
+    assert 'class="status-badge running"' in body
 
 
-def test_a_finished_run_shows_no_spinner(client, active_run):
+def test_a_finished_run_wears_the_badge_for_how_it_ended(client, active_run):
     active_run(make_run("provision", "osgiliath", outcome="succeeded", exit_code=0))
     body = client.get("/run").text
     assert "Provisioned osgiliath" in body
-    assert 'class="spinner"' not in body
+    assert 'class="status-badge ok"' in body
     assert "Finished cleanly (exit 0)." in body
+
+
+def test_a_failed_run_wears_the_same_badge_as_a_locked_secret(client, active_run):
+    active_run(make_run("provision", "osgiliath", outcome="failed", exit_code=2))
+    body = client.get("/run").text
+    assert 'class="status-badge failed"' in body
 
 
 def test_the_terminal_event_carries_the_wording_rendered(client, active_run):

@@ -196,16 +196,17 @@ rather than reporting a clean load of a form that is now half something else.
 
 ## Runs
 
-The run screen names the machine the run is about and keeps a spinner beside
-it while it is going: *Provisioning osgiliath…*, *Configuring edoras…*. A
-provision run knows the name because `create-vm.yml` claims the first free
-name in the pool, which is the same rule the interface applies to decide what
-to display.
+The run screen names the machine the run is about, in the same badge the
+sidebar uses for a secret's lock state — a coloured box with a coloured
+indicator and the state in words. While the run is going the indicator spins in
+place: *Provisioning osgiliath…*, *Configuring edoras…*. A provision run knows
+the name because `create-vm.yml` claims the first free name in the pool, which
+is the same rule the interface applies to decide what to display.
 
-When a run ends, the screen says what happened to that machine —
-*Provisioned osgiliath*, or *Provisioning osgiliath failed (exit 2)* with a
-line on what the automation did about it. A cancelled run is reported as
-cancelled, not as a failure.
+When a run ends the badge takes the colour of how it ended — green for
+*Provisioned osgiliath*, red for *Provisioning osgiliath failed (exit 2)*,
+neutral for a cancelled one — with a line underneath on what the automation did
+about it. Cancelling is reported as cancelling, not as a failure.
 
 ## What the interface does not support
 

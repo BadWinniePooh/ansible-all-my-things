@@ -3,9 +3,13 @@
 {% block title %}Run — Steward{% endblock %}
 {% block heading %}Run{% endblock %}
 {% block topbar %}
+  {#
+    The same badge the sidebar uses for a secret's lock state: coloured
+    box, coloured indicator, the state in words. A running run spins the
+    indicator in place rather than changing the badge's shape.
+  #}
   {% if state %}
-  <span id="run-state" class="run-state run-{{ state.tone }}">
-    {% if state.tone == 'running' %}<span class="spinner" aria-hidden="true"></span>{% endif %}
+  <span id="run-state" class="status-badge {{ state.tone }}">
     <span id="run-label">{{ state.label }}</span>
   </span>
   {% endif %}
@@ -67,9 +71,7 @@
     var data = JSON.parse(event.data);
     if (data.label) labelEl.textContent = data.label;
     detailEl.textContent = data.detail || '';
-    stateEl.className = 'run-state run-' + (data.tone || 'failed');
-    var spinner = stateEl.querySelector('.spinner');
-    if (spinner) spinner.remove();
+    stateEl.className = 'status-badge ' + (data.tone || 'failed');
     var cancel = document.querySelector('form[action="/run/cancel"]');
     if (cancel) cancel.remove();
     source.close();
