@@ -372,10 +372,12 @@ section > h2 {
   border-bottom: 1px solid var(--border);
   font-size: 15px;
 }
-section > *:not(h1):not(h2):not(table) { margin-left: 18px; margin-right: 18px; }
-section > *:not(h1):not(h2):first-child { margin-top: 18px; }
-section > *:last-child { margin-bottom: 18px; }
-section > table:last-child { margin-bottom: 0; }
+/* A card's content sits in .card-body, which carries the padding; a table
+   and anything else meant to reach the card's edges is a direct child and
+   gets none. There is deliberately no blanket rule insetting whatever a
+   section happens to contain: it inset a table the moment one was wrapped
+   in a div, and it double-padded every .card-body by adding a margin to
+   the padding that element already has. */
 
 .card-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .card-note { color: var(--text-muted); font-size: 13px; margin: 0; text-wrap: pretty; }
