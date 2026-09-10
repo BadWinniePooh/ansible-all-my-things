@@ -2,7 +2,7 @@
 
 ## Start it
 
-Fetch [compose.yaml](../../../../compose.yaml) and start it â€” no checkout of
+Fetch [compose.yaml](../../../../compose.yaml) and start it — no checkout of
 this repository and no Ansible installation required:
 
 ```shell
@@ -30,7 +30,7 @@ docker compose -f compose.build.yaml up -d --build
 > Do not change the port binding from `127.0.0.1` to `0.0.0.0`, and do not put
 > the container behind a reverse proxy reachable from outside the operator's
 > own machine, unless a separate authenticating proxy sits in front of it. The
-> project adds no authentication layer of its own â€” the two session secrets
+> project adds no authentication layer of its own — the two session secrets
 > are a credential-unlock step, not a login system, and a fresh visitor with
 > network access to the port has the same access as the operator until a
 > secret has been entered.
@@ -47,7 +47,7 @@ re-entering them is normal, not an error.
 locked, the dashboard is the unlock form and nothing else: the machine list,
 provisioning and destroy all need that token, so showing them would only offer
 actions that are refused. Once it is unlocked the dashboard shows the machines
-and the name pool. The sidebar marks the same rule everywhere â€” Create VM, Run,
+and the name pool. The sidebar marks the same rule everywhere — Create VM, Run,
 Vault and SSH key carry a padlock until the secrets they need are present,
 while Name pool and Presets stay open because neither reads a secret.
 
@@ -62,7 +62,7 @@ exists. Enter it identically both times or nothing is created (spec.md FR-051).
 
 If a vault password is lost, the installation is stuck rather than merely
 inconvenienced: Ansible loads `group_vars/all/vault.yml` for every host, so a
-file nobody can decrypt fails every run before the first task â€” provisioning,
+file nobody can decrypt fails every run before the first task — provisioning,
 configuring, **and destroying**, which means a running machine keeps costing
 money with no way to remove it from the interface.
 
@@ -71,7 +71,7 @@ Type `discard` to confirm. It deletes the encrypted configuration and forgets
 the vault password in every session, so setup starts over with a new password
 (spec.md FR-052). What it costs:
 
-- Every value the configuration held is gone for good â€” the Ansible user
+- Every value the configuration held is gone for good — the Ansible user
   password, the GNOME keyring password, and each desktop user's password and
   Exa API key. There is no backup copy, deliberately: a file nobody can open,
   kept "just in case", is a permanent copy of those same passwords.
@@ -83,7 +83,7 @@ the vault password in every session, so setup starts over with a new password
   through the interface, once the new configuration and key registration are in
   place.
 
-Discarding is refused while a run is active â€” that run is reading the file.
+Discarding is refused while a run is active — that run is reading the file.
 
 ## Persistent state
 
@@ -103,7 +103,7 @@ FR-048).
 
 Four choices make a machine: a profile (`basic` or `desktop`), a server size,
 a location, and an operating system image. The screen opens on the built-in
-lists â€” three sizes, six locations, the current Ubuntu LTS releases â€” which
+lists — three sizes, six locations, the current Ubuntu LTS releases — which
 need no Hetzner account to display and are enough for the common case.
 
 **Size and location are coupled.** A Hetzner server size can only be ordered
@@ -116,7 +116,7 @@ a valid pair.
 *Show full image catalogue from Hetzner* query the account itself. Both need
 the API token unlocked on the dashboard; without it, the built-in lists stay
 on screen with a note saying why. The same note appears, naming the cause, if
-the lookup fails or comes back empty â€” a live lookup never blocks the screen.
+the lookup fails or comes back empty — a live lookup never blocks the screen.
 
 Live sizes are limited to current x86 types. Deprecated sizes are dropped, and
 so are the arm64 (`cax`) ones, which cannot boot the x86 images this interface
@@ -124,7 +124,7 @@ offers.
 
 **The price column is a "from" figure.** A size can cost different amounts in
 different locations, so the table shows the cheapest one across the locations
-that size is available in â€” not the price in the location currently selected.
+that size is available in — not the price in the location currently selected.
 
 **The size table sorts.** Click any column header to sort by it; click again
 to reverse. Sorting is display-only and never changes the selection.
@@ -132,28 +132,28 @@ to reverse. Sorting is display-only and never changes the selection.
 **Nothing is guessed for you.** A submission missing a profile, size, location
 or image is refused with a message naming the field, as is a size paired with
 a location it cannot be ordered in. The interface never silently substitutes a
-default for a choice that was not made â€” including when saving a preset, which
+default for a choice that was not made — including when saving a preset, which
 would otherwise hand the wrong choice back on every later load of it.
 
 **The image list and the *Other* field are exclusive.** *Other* takes a
 free-text image name for anything not listed, such as `debian-12`. Typing into
 it clears the selection in the list above and dims it, because free text is
-what actually gets used â€” leaving an entry looking selected would misreport
+what actually gets used — leaving an entry looking selected would misreport
 what is about to be provisioned. Clicking an entry in the list is how you
 switch back; that empties the free-text field. Emptying it by hand restores
 whatever was selected before.
 
 **The image name is checked against your account, not guessed at.** As you
-type into *Other*, the field reports whether that image actually exists â€”
+type into *Other*, the field reports whether that image actually exists —
 green when it does, red with the reason when it does not. A deprecated image
 is flagged but allowed; it still boots until Hetzner withdraws it. Both forms
 work: an image name such as `debian-12`, and a numeric image id, which is how
 to boot one of your own snapshots.
 
 The check needs the API token unlocked; until then the field says so instead
-of guessing. It also runs at submission time on whichever image is selected â€”
+of guessing. It also runs at submission time on whichever image is selected —
 including one picked from the built-in list, which goes stale as Hetzner adds
-and withdraws releases â€” so provisioning is refused up front rather than
+and withdraws releases — so provisioning is refused up front rather than
 failing minutes later with a name already taken from the pool.
 
 *Preview command* renders the exact `ansible-playbook` invocation the current
@@ -161,8 +161,8 @@ choices produce, without running anything.
 
 ## What the dashboard knows about a machine
 
-Two sources, each authoritative for different things. The local records â€”
-`hcloud_autogenerated.yml` plus the interface's own side file â€” decide **which**
+Two sources, each authoritative for different things. The local records —
+`hcloud_autogenerated.yml` plus the interface's own side file — decide **which**
 machines this installation manages and which profile each was given; Hetzner
 has never heard of a profile. The account decides **what** each machine is:
 size, location, address and power state are read from `GET /servers` with the
@@ -171,7 +171,7 @@ unlocked API token and overlaid on the local rows.
 That overlay is why a machine created from the command line, restored from a
 backup, or provisioned before the side file existed shows its real size and
 location rather than "unknown". A server in the account that this installation
-does not manage is not listed â€” it is not this installation's to configure or
+does not manage is not listed — it is not this installation's to configure or
 destroy. While the API token is locked the account is not read at all, and a
 lookup that fails says so and leaves the local records on screen.
 
@@ -179,7 +179,7 @@ lookup that fails says so and leaves the local records on screen.
 
 Every sentence the interface says about an action lives in
 [webui/messages.py](../../../../webui/messages.py), in one style: one sentence,
-past tense, naming what happened to what â€” *Name pool saved.*, *Preset
+past tense, naming what happened to what — *Name pool saved.*, *Preset
 dev-desktop saved.*, *Key rotated. Machines provisioned with the previous key
 can no longer be reached by the automation.*
 
@@ -192,13 +192,14 @@ owns those, because they are about a machine rather than about a form.
 ## Presets
 
 A preset is a saved set of create-form choices. They live in a column beside
-the create form â€” the rail â€” which is not rendered at all until at least one
-preset exists.
+the create form — the rail. The list of saved presets is dropped while there
+are none, but *Save as new* is always there: hiding the whole rail until a
+preset existed left no way to make the first one.
 
 **The rail says where the form came from and what you have changed since.**
 The preset the form was loaded from is marked and offers *Reset*, which loads
 it again and throws the edits away. Under the list, the difference from that
-preset is spelled out field by field â€” *Size cx33 â†’ cx43* â€” and updates as you
+preset is spelled out field by field — *Size cx33 → cx43* — and updates as you
 edit, without a page load.
 
 **Two ways to keep a change.** *Update &lt;preset&gt;* writes the current choices
@@ -207,10 +208,19 @@ Both validate exactly as provisioning does, so a preset can never record a
 default nobody picked.
 
 **Choices that are already saved cannot be saved again.** When the form matches
-a preset exactly, saving is refused and the box says which preset holds them â€”
+a preset exactly, saving is refused and the box says which preset holds them —
 otherwise it would either fail on the taken name or leave two presets saying
 the same thing. Matching is on the choices, not on which preset was clicked, so
 it catches choices arrived at by hand too.
+
+**A running machine can be saved as a preset.** Each row of the machines table
+carries *Save as preset*, prefilled with the machine's own name. It records
+what that machine actually is: the profile from the local records, and the
+size, location and image from the Hetzner account — the image comes from
+nowhere else, since no local file has ever recorded what a machine was built
+from. The API token therefore has to be unlocked, and a machine the account
+cannot fully describe (a snapshot-built server has no image name, only a
+description) is refused by name rather than saved with a hole in it.
 
 Renaming and deleting stay on the presets screen, one click away through
 *Manage presets*.
@@ -223,7 +233,7 @@ Without this the form would match those choices against the built-in lists,
 find them unknown, and quietly provision something else.
 
 **A partial restore says which part failed.** The image can restore while the
-size cannot â€” the account no longer offers it, the live lookup fell back to
+size cannot — the account no longer offers it, the live lookup fell back to
 the built-in lists, or the location is not orderable for the size. The page
 names each part that could not be honoured and what was selected instead,
 rather than reporting a clean load of a form that is now half something else.
@@ -237,17 +247,17 @@ arithmetic, not a guess: the machines table shows what each one has cost since
 the first of the month, beside when it was created, and refreshes itself every
 minute.
 
-**The dashboard card** carries two figures â€” spent so far this month, and a
-projection for month end that assumes nothing is created or destroyed â€” over a
+**The dashboard card** carries two figures — spent so far this month, and a
+projection for month end that assumes nothing is created or destroyed — over a
 six-month sparkline. *All months* leads to the costs screen, which splits the
 current month per machine (including the ones already destroyed, shaded) and
 lists every month the ledger knows about.
 
 **What the running machines cost per hour rides in the sidebar badge**, beside
-the machine count and above the two lock states â€” *2 machines Â· â‚¬0.023/h*. It
+the machine count and above the two lock states — *2 machines · €0.023/h*. It
 belongs in the corner of the eye rather than in a section of its own, and it is
 as true on the vault screen as on the dashboard. No machines running means no
-rate: â‚¬0.00/h would read as "these are free".
+rate: €0.00/h would read as "these are free".
 
 **Machines that no longer exist still count.** The account forgets a server the
 moment it is destroyed, but the invoice does not, so the interface keeps its own
@@ -272,30 +282,30 @@ The ledger is a SQLite file in the volume
 (`inventories/.webui/costs.sqlite3`), so it survives restarts and image
 upgrades along with everything else you own, and is backed up by copying the
 same volume. The costs screen reads only that file, so it answers with the
-session locked â€” what a machine cost is not a secret.
+session locked — what a machine cost is not a secret.
 
 ## Runs
 
 The run screen names the machine the run is about, in the same badge the
-sidebar uses for a secret's lock state â€” a coloured box with a coloured
+sidebar uses for a secret's lock state — a coloured box with a coloured
 indicator and the state in words. While the run is going the indicator spins in
-place: *Provisioning osgiliathâ€¦*, *Configuring edorasâ€¦*. A provision run knows
+place: *Provisioning osgiliath…*, *Configuring edoras…*. A provision run knows
 the name because `create-vm.yml` claims the first free name in the pool, which
 is the same rule the interface applies to decide what to display.
 
-When a run ends the badge takes the colour of how it ended â€” green for
+When a run ends the badge takes the colour of how it ended — green for
 *Provisioned osgiliath*, red for *Provisioning osgiliath failed (exit 2)*,
-neutral for a cancelled one â€” with a line underneath on what the automation did
+neutral for a cancelled one — with a line underneath on what the automation did
 about it. Cancelling is reported as cancelling, not as a failure.
 
 ## What the interface does not support
 
 Matching the feature's scope
-([spec.md Â§ Assumptions](../../../../specs/017-hcloud-web-frontend/spec.md#assumptions)):
+([spec.md § Assumptions](../../../../specs/017-hcloud-web-frontend/spec.md#assumptions)):
 
-- The `tart` and `docker` providers â€” both need a host-level tool or the
+- The `tart` and `docker` providers — both need a host-level tool or the
   host's own container daemon, neither of which exists inside this container.
-- The AWS provider and the Windows profile â€” a second credential model, out
+- The AWS provider and the Windows profile — a second credential model, out
   of scope.
 - Backup and restore.
 - More than one run at a time.

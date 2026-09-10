@@ -16,7 +16,7 @@
 </p>
 {% endif %}
 
-<div class="columns {{ 'columns-single' if not presets }}">
+<div class="columns">
 
 <form id="create-form" method="post" action="/create" class="stack">
 
@@ -107,11 +107,13 @@
 
 {#
   The rail: which preset the form came from, how it differs now, and the
-  two ways to keep the difference. Not rendered at all when nothing is
-  saved -- an empty rail is a column of nothing.
+  two ways to keep the difference. The list of saved presets is dropped
+  when there are none -- an empty list is a box of nothing -- but "Save as
+  new" always renders: hiding the whole rail until a preset existed left
+  no way to make the first one.
 #}
-{% if presets %}
 <div class="stack" id="preset-rail">
+  {% if presets %}
   <section>
     <h2>Presets</h2>
     <div class="card-body">
@@ -131,6 +133,7 @@
       <a class="helper" href="/presets">Manage presets</a>
     </div>
   </section>
+  {% endif %}
 
   <section id="preset-changes" {{ 'hidden' | safe if not preset_base }}>
     <h2><span id="preset-changes-count">{{ preset_diff | length }}</span>
@@ -183,7 +186,6 @@
     </div>
   </section>
 </div>
-{% endif %}
 
 </div>
 

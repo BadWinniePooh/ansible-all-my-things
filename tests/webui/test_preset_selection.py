@@ -70,11 +70,17 @@ def unlocked(client):
     return session_id
 
 
-def test_no_rail_when_nothing_is_saved(client, unlocked, presets_file):
+def test_the_first_preset_can_be_saved_when_none_exist_yet(client, unlocked, presets_file):
+    """The rail used to render only once a preset existed, which took the
+    Save box with it -- so the first preset could never be made from the
+    create form at all."""
     body = client.get("/create").text
-    assert 'id="preset-rail"' not in body
-    # ...and the form takes the whole width rather than leaving a gap.
-    assert "columns-single" in body
+
+    assert 'id="preset-rail"' in body
+    assert 'id="preset-save-button"' in body
+    # The list of saved presets is still dropped: an empty list is a box of
+    # nothing, while the Save box is the way out of having none.
+    assert "Manage presets" not in body
 
 
 def test_the_rail_lists_every_preset_with_what_it_contains(client, unlocked, presets_file):

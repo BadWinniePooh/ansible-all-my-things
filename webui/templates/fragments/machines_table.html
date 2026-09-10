@@ -49,6 +49,15 @@
             <form method="post" action="/machines/{{ machine.name }}/configure">
               <button class="btn-sm" type="submit" {{ 'disabled' if not (token_unlocked and vault_unlocked) }}>Configure</button>
             </form>
+            {# Prefilled with the machine's own name: a preset made from a
+               machine is usually about that kind of machine, and the name
+               is the one word the user already has in mind. #}
+            <form method="post" action="/machines/{{ machine.name }}/preset">
+              <input id="preset-name-{{ machine.name }}" hx-preserve="true" type="text"
+                     name="preset_name" value="{{ machine.name }}"
+                     placeholder="preset name" required>
+              <button class="btn-sm" type="submit" {{ 'disabled' if not token_unlocked }}>Save as preset</button>
+            </form>
             <form method="post" action="/machines/{{ machine.name }}/destroy">
               <input id="confirm-{{ machine.name }}" hx-preserve="true" type="text" name="confirm_name"
                      placeholder="type '{{ machine.name }}' to confirm" required>

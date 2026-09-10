@@ -10,7 +10,7 @@
 container image serving a clean, easy-to-use web UI that provisions, configures and
 destroys Hetzner Cloud VMs by driving this repository's existing playbooks. Anyone can
 use it against their own Hetzner account; nothing in the image is tied to a particular
-account. Scope: provider hcloud only, full lifecycle create â†’ configure â†’ destroy,
+account. Scope: provider hcloud only, full lifecycle create → configure → destroy,
 profiles basic and desktop. All non-secret variables are selectable in the UI and applied
 per run; the repository's own default files are never rewritten. The vault is editable
 from the UI, preserving values the form does not model. The Hetzner API token and the
@@ -253,6 +253,14 @@ is filled with the saved values.
    **Then** the preset is available under the new name and no longer under the old one.
 5. **Given** a saved preset, **When** the user renames it to a name already in use, **Then**
    the tool refuses and explains that the name is taken.
+6. **Given** no presets at all, **When** the user opens the create screen, **Then** the
+   action that saves the current choices as a preset is available.
+7. **Given** a running machine, **When** the user saves it as a preset, **Then** the preset
+   holds that machine's profile, size, location and image, and provisioning from it produces
+   the same kind of machine.
+8. **Given** a machine whose size, location or image the provider does not report, **When**
+   the user saves it as a preset, **Then** the tool refuses, names what is missing, and
+   saves nothing.
 
 ---
 
@@ -294,7 +302,7 @@ is filled with the saved values.
 #### Deployment and distribution
 
 - **FR-001**: The system MUST be distributed as a container image that requires only a
-  container runtime to run â€” no local Ansible installation and no checkout of this
+  container runtime to run — no local Ansible installation and no checkout of this
   repository.
 - **FR-002**: The image MUST be fully self-contained. It MUST NOT depend on, derive from,
   or require the separately published ansible-runner image, and building it MUST NOT
@@ -391,7 +399,7 @@ is filled with the saved values.
 - **FR-039**: The system MUST provide the project's existing ten-name pool as the default.
 - **FR-040**: Users MUST be able to edit, add, remove and reorder pool entries, and the
   result MUST persist across restarts.
-- **FR-041**: Pool order MUST determine which name a new machine receives â€” the first free
+- **FR-041**: Pool order MUST determine which name a new machine receives — the first free
   name in order.
 - **FR-042**: Pool entries MUST be validated against the naming rules the cloud provider
   accepts, at the time they are saved.
@@ -403,8 +411,8 @@ is filled with the saved values.
 
 #### Persistence and updates
 
-- **FR-046**: User-owned state â€” encrypted configuration, the record of existing machines,
-  host key records, the name pool, saved presets and the SSH keypair â€” MUST persist across
+- **FR-046**: User-owned state — encrypted configuration, the record of existing machines,
+  host key records, the name pool, saved presets and the SSH keypair — MUST persist across
   restarts and upgrades.
 - **FR-047**: When the running image is newer than the state it was set up with, the system
   MUST inform the user rather than silently continuing with outdated defaults.
@@ -422,10 +430,15 @@ is filled with the saved values.
   entries are identical. This first password is the only one that cannot be checked against
   the stored configuration, so a mistyped entry would silently become the real password.
 - **FR-052**: Users MUST be able to discard the encrypted configuration from the interface,
-  on an explicit typed confirmation, without holding a working vault password â€” and the
+  on an explicit typed confirmation, without holding a working vault password — and the
   interface MUST state that every stored value is lost. Without this, a password that no
   longer opens the configuration blocks every run, including destroying a machine that is
   still being charged for.
+- **FR-053**: Users MUST be able to save an existing machine as a preset, taking its
+  profile, size, location and image from what that machine actually is. The interface MUST
+  refuse rather than save an incomplete preset when any of those cannot be determined.
+- **FR-054**: The action that saves a set of choices as a new preset MUST be reachable when
+  no preset exists yet, since otherwise the first one can never be created.
 - **FR-055**: The count of running machines MUST agree with the machine list on the same
   screen. Any record of a machine that the provider no longer reports MUST be reconciled
   whenever the provider can be reached, including when the installation manages no machines
@@ -439,8 +452,8 @@ is filled with the saved values.
   only with the vault password. Includes values the form models and values it does not.
 - **SSH keypair**: one private key held by the tool and one public key registered with the
   user's Hetzner account under a configured name. Replaceable.
-- **Machine record**: what the tool knows about a provisioned machine â€” name, size,
-  location, profile, address â€” and the basis for applying a profile or destroying it.
+- **Machine record**: what the tool knows about a provisioned machine — name, size,
+  location, profile, address — and the basis for applying a profile or destroying it.
 - **Machine name pool**: the ordered list of names available to new machines, with the
   project's ten defaults as the starting point.
 - **Preset**: a saved, named set of create-form choices.
@@ -454,14 +467,14 @@ is filled with the saved values.
 - **SC-001**: A person with a Hetzner account, a container runtime, and no prior knowledge
   of this project can go from nothing to a running interface in under 5 minutes, using only
   the published compose file and the documentation.
-- **SC-002**: The same person can complete first-run setup â€” credentials, configuration and
-  a registered SSH key â€” in under 10 minutes without editing any file by hand.
+- **SC-002**: The same person can complete first-run setup — credentials, configuration and
+  a registered SSH key — in under 10 minutes without editing any file by hand.
 - **SC-003**: Provisioning a machine requires no more than four choices and one
   confirmation.
 - **SC-004**: 100% of provisioning, configuration and destruction runs report a clear
   terminal outcome; none end in an ambiguous or silent state.
 - **SC-005**: The Hetzner API token and the vault password appear in zero persisted
-  artifacts â€” no file, no log, no run output â€” verified by automated test.
+  artifacts — no file, no log, no run output — verified by automated test.
 - **SC-006**: No credential, key or account identifier belonging to any individual is
   present in the published image, verified by automated test.
 - **SC-007**: The published image contains no component that serves only out-of-scope
@@ -470,8 +483,8 @@ is filled with the saved values.
   changes.
 - **SC-009**: All user-owned state survives a restart and an upgrade to a newer image, with
   only the two session secrets needing re-entry.
-- **SC-010**: Every error a user can provoke â€” wrong password, invalid token, exhausted
-  pool, invalid name, in-use name, unreachable machine â€” produces a message that names the
+- **SC-010**: Every error a user can provoke — wrong password, invalid token, exhausted
+  pool, invalid name, in-use name, unreachable machine — produces a message that names the
   cause.
 - **SC-011**: Run output becomes visible within 5 seconds of a run starting, rather than
   only at completion.

@@ -27,6 +27,7 @@ DONE: dict[str, str] = {
     "vault-discarded": "Encrypted configuration discarded. The next vault password you enter becomes the new one.",
     "pool-saved": "Name pool saved.",
     "preset-deleted": "Preset deleted.",
+    "preset-saved-from-machine": "Preset saved from that machine's profile, size, location and image.",
     "preset-renamed": "Preset renamed.",
     "sshkey-generated": "Keypair generated and registered with Hetzner.",
     "sshkey-rotated": "Key rotated. Machines provisioned with the previous key can no longer be reached by the automation.",
@@ -93,6 +94,24 @@ def preset_name_taken(name: str) -> str:
 
 def preset_name_required() -> str:
     return "Name the preset before saving it."
+
+
+def preset_needs_the_account() -> str:
+    return (
+        "The Hetzner API token must be unlocked to save a machine as a preset: its size, "
+        "location and image are read from the account, not from the local records."
+    )
+
+
+def machine_unknown(name: str) -> str:
+    return f"No machine named {name} is managed here."
+
+
+def machine_not_describable(name: str, missing: list[str]) -> str:
+    return (
+        f"Hetzner does not report the {', '.join(missing)} of {name}, so a preset made from "
+        "it would provision something different. Nothing was saved."
+    )
 
 
 def preset_missing(name: str) -> str:

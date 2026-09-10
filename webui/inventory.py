@@ -43,6 +43,11 @@ class Machine:
     # guessed start (webui/pricing.py).
     created_at: datetime | None = None
     rates: pricing.Rates = field(default=pricing.NO_RATES)
+    # What the machine was built from, as the account reports it. Nothing
+    # local records this -- the image is a create-time choice the machine
+    # record never kept -- so it is None until the account is asked, and
+    # it is the one field of a preset that can only come from there.
+    image: str | None = None
 
 
 def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[Machine]:
@@ -72,6 +77,7 @@ def merge_account_detail(machines: list[Machine], servers: list[dict]) -> list[M
                 status=server.get("status"),
                 created_at=pricing.parse_timestamp(server.get("created")),
                 rates=pricing.rates_for(server.get("server_type"), location),
+                image=_image_of(server),
             )
         )
     return merged
@@ -84,6 +90,23 @@ def _name_of(value: object) -> str | None:
         name = value.get("name")
         return name if isinstance(name, str) else None
     return value if isinstance(value, str) else None
+
+
+def _image_of(server: dict) -> str | None:
+    """What the server was built from, named the way the create form names
+    it.
+
+    A system image answers with a name (`ubuntu-26.04`), which is exactly
+    what `image:` takes. A snapshot has no name at all, only a
+    description, and its description is not a reference anything can
+    provision from -- so it reads as unknown rather than as a name that
+    would fail later.
+    """
+    image = server.get("image")
+    if not isinstance(image, dict):
+        return _name_of(image)
+    name = image.get("name")
+    return name if isinstance(name, str) and name else None
 
 
 def _location_of(server: dict) -> str | None:

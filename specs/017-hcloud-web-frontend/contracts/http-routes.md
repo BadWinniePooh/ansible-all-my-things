@@ -68,9 +68,15 @@ requires a second confirmation before replacing it.
 | `POST` | `/create` | token + vault password | Start a provisioning run |
 | `POST` | `/machines/{name}/configure` | token + vault password | Start a configuration run against one machine |
 | `POST` | `/machines/{name}/destroy` | token + vault password | Start a destruction run; requires the typed machine name as confirmation |
+| `POST` | `/machines/{name}/preset` | token | Save this machine's profile, size, location and image as a preset under the submitted name |
 
 `POST /create` and both machine routes return the run view. Each refuses with an
 explanation when a run is already active (FR-035).
+
+`POST /machines/{name}/preset` reads the size, location and image from the Hetzner account,
+which is why it needs the token and why it answers `400` when the account does not report
+all of them — naming the ones it did not. A name already taken answers `409` rather than
+overwriting, matching `POST /presets`.
 
 `POST /machines/{name}/destroy` refuses when the submitted confirmation does not match the
 machine name exactly.

@@ -88,19 +88,19 @@ templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_
 
 def _euro(amount: float | None) -> str:
     """A money figure, or "unknown" when there is nothing to compute one
-    from -- never â‚¬0.00, which would read as "this machine is free"."""
+    from -- never €0.00, which would read as "this machine is free"."""
     if amount is None:
         return "unknown"
-    return f"â‚¬{amount:,.2f}"
+    return f"€{amount:,.2f}"
 
 
 def _euro_rate(amount: float | None) -> str:
     """An hourly rate. Three decimals, because a cent an hour is the order
-    of magnitude here and â‚¬0.01 would round two machines to the same
+    of magnitude here and €0.01 would round two machines to the same
     figure."""
     if amount is None:
         return "nothing"
-    return f"â‚¬{amount:,.3f}/h"
+    return f"€{amount:,.3f}/h"
 
 
 templates.env.filters["euro"] = _euro
@@ -1356,28 +1356,114 @@ async def run_cancel(request: Request):
     return RedirectResponse("/run", status_code=303)
 
 
+def _dashboard_refusal(request: Request, error: str, *, status_code: int):
+    """The dashboard rendered with a refusal on it.
+
+    Every action started from a machine row answers this way when it will
+    not run: the page the user is already looking at, carrying the reason,
+    rather than a redirect to somewhere with no context.
+    """
+    return templates.TemplateResponse(
+        request, "dashboard.html", _dashboard_context(request, error=error), status_code=status_code
+    )
+
+
+def _preset_from_machine(machine, preset_name: str) -> presets.Preset:
+    """A preset that would provision this machine again.
+
+    The two catalogue flags are derived rather than asked for: a size or
+    image that is not in the built-in lists can only have come from the
+    live catalogue, and a preset that claims otherwise cannot be restored
+    (webui/presets.py Preset).
+    """
+    built_in_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
+    return presets.Preset(
+        name=preset_name,
+        profile=machine.profile,
+        server_type=machine.server_type,
+        location=machine.location,
+        image=machine.image,
+        server_types_live=machine.server_type not in config.SERVER_TYPES,
+        images_live=machine.image not in built_in_images,
+    )
+
+
+@app.post("/machines/{name}/preset")
+async def machine_save_as_preset(name: str, request: Request, preset_name: str = Form(default="")):
+    """Save a running machine's choices as a preset.
+
+    The create form can only save what is currently typed into it, which
+    is no help for a machine that already exists and turned out to be the
+    right shape. What that machine actually is lives in two places: the
+    profile in the local records, and the size, location and image in the
+    Hetzner account -- the image nowhere else at all, since no local file
+    has ever recorded it.
+    """
+    session_id = request.state.session_id
+    status = session_status_context(session_id)
+    preset_name = preset_name.strip()
+
+    if not preset_name:
+        return _dashboard_refusal(request, messages.preset_name_required(), status_code=400)
+
+    if not status["token_unlocked"]:
+        return _dashboard_refusal(request, messages.preset_needs_the_account(), status_code=400)
+
+    machines, _ = _machines_with_account_detail(session_id, status)
+    machine = next((entry for entry in machines if entry.name == name), None)
+    if machine is None:
+        return _dashboard_refusal(request, messages.machine_unknown(name), status_code=404)
+
+    # Named individually rather than as "some detail is missing": which one
+    # the account did not answer is what tells the user whether to look at
+    # a snapshot-built machine, a locked token, or a machine the account
+    # has already forgotten (Principle XII).
+    missing = [
+        label
+        for label, value in (
+            ("profile", machine.profile),
+            ("size", machine.server_type),
+            ("location", machine.location),
+            ("image", machine.image),
+        )
+        if not value
+    ]
+    if missing:
+        return _dashboard_refusal(
+            request, messages.machine_not_describable(name, missing), status_code=400
+        )
+
+    try:
+        presets.save(_preset_from_machine(machine, preset_name))
+    except presets.PresetNameTaken:
+        return _dashboard_refusal(
+            request, messages.preset_name_taken(preset_name), status_code=409
+        )
+
+    return messages.done("/presets", "preset-saved-from-machine")
+
+
 @app.post("/machines/{name}/configure")
 async def machine_configure(name: str, request: Request):
     session_id = request.state.session_id
     status = session_status_context(session_id)
 
     if not (status["token_unlocked"] and status["vault_unlocked"]):
-        context = _dashboard_context(
-            request, error="Both the Hetzner API token and the vault password must be unlocked."
+        return _dashboard_refusal(
+            request,
+            "Both the Hetzner API token and the vault password must be unlocked.",
+            status_code=400,
         )
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
     command = build_configure_command(machine_name=name)
     try:
         await runner.start(session_id=session_id, action="configure", target=name, command=command)
     except RunAlreadyActive as exc:
-        context = _dashboard_context(
-            request, error=messages.run_already_active(exc.active.action)
+        return _dashboard_refusal(
+            request, messages.run_already_active(exc.active.action), status_code=409
         )
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _dashboard_context(request, error=messages.secrets_missing(exc.missing))
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
+        return _dashboard_refusal(request, messages.secrets_missing(exc.missing), status_code=400)
 
     return RedirectResponse("/run", status_code=303)
 
@@ -1390,29 +1476,28 @@ async def machine_destroy(name: str, request: Request, confirm_name: str = Form(
     status = session_status_context(session_id)
 
     if confirm_name != name:
-        context = _dashboard_context(
+        return _dashboard_refusal(
             request,
-            error=f"Type '{name}' exactly to confirm destroying it. Nothing was removed.",
+            f"Type '{name}' exactly to confirm destroying it. Nothing was removed.",
+            status_code=400,
         )
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
     if not (status["token_unlocked"] and status["vault_unlocked"]):
-        context = _dashboard_context(
-            request, error="Both the Hetzner API token and the vault password must be unlocked."
+        return _dashboard_refusal(
+            request,
+            "Both the Hetzner API token and the vault password must be unlocked.",
+            status_code=400,
         )
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
 
     command = build_destroy_command(machine_name=name)
     try:
         await runner.start(session_id=session_id, action="destroy", target=name, command=command)
     except RunAlreadyActive as exc:
-        context = _dashboard_context(
-            request, error=messages.run_already_active(exc.active.action)
+        return _dashboard_refusal(
+            request, messages.run_already_active(exc.active.action), status_code=409
         )
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=409)
     except SecretsUnavailable as exc:
-        context = _dashboard_context(request, error=messages.secrets_missing(exc.missing))
-        return templates.TemplateResponse(request, "dashboard.html", context, status_code=400)
+        return _dashboard_refusal(request, messages.secrets_missing(exc.missing), status_code=400)
 
     return RedirectResponse("/run", status_code=303)
 

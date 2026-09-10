@@ -142,6 +142,7 @@ interface. The interface never writes this file.
 | address | `ansible_host` | Displayed in the list |
 | profile | group membership | `basic` or `desktop` |
 | size, location | run parameters | Displayed as recorded at creation |
+| status, created, size, location, image | Hetzner account | Overlaid while the API token is unlocked; the image exists nowhere else |
 
 Validation:
 
@@ -203,6 +204,13 @@ Validation:
 - names are unique; saving over an existing name requires confirmation
 - a loaded preset fills the create form but every field remains editable before the run
   starts
+
+A preset has two sources. The create form is one: whatever is typed into it. A machine that
+already exists is the other, through the *Save as preset* action on its row — the profile
+comes from the machine record, and the size, location and image from the Hetzner account.
+The image can come from nowhere else: no local file records what a machine was built from.
+A machine the account cannot fully describe is refused rather than saved with a gap, since
+a preset with a missing field silently provisions something else.
 
 Presets hold no secrets. They are ordinary configuration and are safe at rest.
 
