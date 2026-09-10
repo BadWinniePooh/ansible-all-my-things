@@ -178,6 +178,75 @@ def test_update_writes_the_current_choices_over_the_preset(client, unlocked, pre
     assert len(presets.list_presets()) == 1
 
 
+def test_a_saved_preset_appears_in_the_rail_it_answers_with(client, unlocked, presets_file):
+    """The answer to a save is the rail, not just a sentence: the preset is
+    in the list and in the data the browser diffs against, so it is there
+    without the reload nobody would think to perform."""
+    response = client.post(
+        "/presets",
+        data={
+            "name": "dev-desktop",
+            "profile": "desktop",
+            "server_type": "cx33",
+            "location": "nbg1",
+            "image_select": "ubuntu-24.04",
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'id="preset-rail"' in response.text
+    assert 'data-preset="dev-desktop"' in response.text
+    assert '"name": "dev-desktop"' in response.text
+
+
+def test_saving_makes_the_form_that_preset_so_the_change_list_empties(
+    client, unlocked, presets_file
+):
+    """Having just saved these choices, the form is that preset -- so the
+    rail comes back anchored to it, with nothing changed since, rather than
+    still counting changes against the preset the form was loaded from."""
+    presets.save(SAMPLE)
+
+    response = client.post(
+        "/presets",
+        data={
+            "preset_base": "dev-desktop",
+            "name": "smaller",
+            "profile": "desktop",
+            "server_type": "cx23",
+            "location": "nbg1",
+            "image_select": "ubuntu-24.04",
+        },
+    )
+
+    body = response.text
+    # The hidden field the form carries, swapped out of band.
+    assert 'id="preset-base" value="smaller"' in body
+    # Zero changes, so the section that lists them is hidden and Update has
+    # nothing to write.
+    assert '<span id="preset-changes-count">0</span>' in body
+    assert 'id="preset-changes" hidden' not in body
+    assert "These choices are already saved as" in body
+
+
+def test_an_update_empties_the_changes_it_wrote(client, unlocked, presets_file):
+    presets.save(SAMPLE)
+
+    response = client.post(
+        "/presets/dev-desktop/update",
+        data={
+            "preset_base": "dev-desktop",
+            "profile": "basic",
+            "server_type": "cx43",
+            "location": "fsn1",
+            "image_select": "ubuntu-22.04",
+        },
+    )
+
+    assert '<span id="preset-changes-count">0</span>' in response.text
+    assert 'id="preset-base" value="dev-desktop"' in response.text
+
+
 def test_update_validates_exactly_as_saving_does(client, unlocked, presets_file):
     presets.save(SAMPLE)
 

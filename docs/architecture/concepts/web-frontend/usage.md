@@ -207,6 +207,12 @@ over the preset the form came from; *Save as new* stores them under a new name.
 Both validate exactly as provisioning does, so a preset can never record a
 default nobody picked.
 
+**The rail answers in place.** Saving or updating swaps the whole rail, not just
+a confirmation line: the new preset is in the list, the form now counts as based
+on it, and the change list is empty — because the form is that preset now. A
+refusal comes back the same way, in the same banner, with the rail otherwise
+unchanged. Nothing here needs a reload to become true.
+
 **Choices that are already saved cannot be saved again.** When the form matches
 a preset exactly, saving is refused and the box says which preset holds them —
 otherwise it would either fail on the taken name or leave two presets saying

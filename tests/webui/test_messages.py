@@ -111,7 +111,11 @@ def test_a_saved_preset_is_confirmed_in_the_fragment(client, unlocked):
     )
 
     assert response.status_code == 200
-    assert response.text.strip() == '<p class="banner banner-notice">Preset dev-desktop saved.</p>'
+    # The answer is the whole rail, so the saved preset is in the list and
+    # the change count is right without a reload -- and the sentence is
+    # the same banner a refusal uses.
+    assert '<p class="banner banner-notice">Preset dev-desktop saved.</p>' in response.text
+    assert 'id="preset-rail"' in response.text
 
 
 def test_a_refused_save_uses_the_same_banner_as_a_successful_one(client, unlocked):

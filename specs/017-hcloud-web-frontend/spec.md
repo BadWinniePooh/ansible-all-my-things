@@ -444,6 +444,9 @@ is filled with the saved values.
   screen. Any record of a machine that the provider no longer reports MUST be reconciled
   whenever the provider can be reached, including when the installation manages no machines
   at all.
+- **FR-056**: Saving or updating a preset MUST take visible effect on the screen it was
+  done from, without a manual reload: the saved preset appears among the saved ones, and
+  the list of unsaved changes reflects that they are now saved.
 - **FR-057**: The system MUST record, for each machine it provisions, the choices the
   machine was ordered with — including which catalogue the size and image were picked from,
   which the provider cannot report.

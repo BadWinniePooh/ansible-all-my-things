@@ -1,0 +1,12 @@
+{# The rail as an answer to a save or an update.
+
+   Two things outside the rail have to change with it, so they ride along
+   as out-of-band swaps: the preset data the browser diffs against
+   (static/preset-selection.js re-reads it on every htmx swap), and which
+   preset the form now counts as its base -- after saving as new, that is
+   the preset just written, which is what empties the change list. #}
+{% include "fragments/preset_rail.html" %}
+
+<script type="application/json" id="preset-data" hx-swap-oob="true">{{ presets_json | safe }}</script>
+
+<input type="hidden" name="preset_base" id="preset-base" value="{{ preset_base or '' }}" hx-swap-oob="true">

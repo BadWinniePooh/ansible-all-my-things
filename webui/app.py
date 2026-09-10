@@ -88,19 +88,19 @@ templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_
 
 def _euro(amount: float | None) -> str:
     """A money figure, or "unknown" when there is nothing to compute one
-    from -- never â‚¬0.00, which would read as "this machine is free"."""
+    from -- never €0.00, which would read as "this machine is free"."""
     if amount is None:
         return "unknown"
-    return f"â‚¬{amount:,.2f}"
+    return f"€{amount:,.2f}"
 
 
 def _euro_rate(amount: float | None) -> str:
     """An hourly rate. Three decimals, because a cent an hour is the order
-    of magnitude here and â‚¬0.01 would round two machines to the same
+    of magnitude here and €0.01 would round two machines to the same
     figure."""
     if amount is None:
         return "nothing"
-    return f"â‚¬{amount:,.3f}/h"
+    return f"€{amount:,.3f}/h"
 
 
 templates.env.filters["euro"] = _euro
@@ -373,22 +373,6 @@ async def session_lock(request: Request):
 async def session_status(request: Request):
     status = session_status_context(request.state.session_id)
     return templates.TemplateResponse(request, "fragments/session_status.html", status)
-
-
-def _flash(
-    request: Request, message: str, *, tone: str = "notice", status_code: int = 200
-) -> HTMLResponse:
-    """One banner, swapped into the page by htmx.
-
-    Rendered from the same template the full pages use, so a message
-    delivered into a fragment looks like a message delivered on a reload.
-    """
-    return templates.TemplateResponse(
-        request,
-        "fragments/flash.html",
-        {"message": message, "tone": tone},
-        status_code=status_code,
-    )
 
 
 def _desktop_users_from_form(form) -> list[dict]:
@@ -1579,6 +1563,46 @@ async def presets_page(request: Request, done: str | None = None):
     )
 
 
+def _preset_rail_response(
+    request: Request,
+    form,
+    *,
+    message: str,
+    tone: str = "notice",
+    status_code: int = 200,
+    preset_base: str | None = None,
+):
+    """The create screen's rail, re-rendered after a save or an update.
+
+    Answering with the rail rather than with the message alone is what
+    makes a written preset visible where it belongs: in the list, in the
+    change count, and in the save box that now says these choices are
+    already saved -- without a reload the user has no reason to perform.
+
+    ``preset_base`` names the preset the form should now count as its
+    base. After saving as new that is the preset just written, which is
+    what empties the change list; passing nothing keeps whatever the form
+    submitted.
+    """
+    all_presets = presets.list_presets()
+    selected = _selected_from_form(form)
+    base_name = preset_base if preset_base is not None else (form.get("preset_base") or "") or None
+    base = next((preset for preset in all_presets if preset.name == base_name), None)
+    return templates.TemplateResponse(
+        request,
+        "fragments/preset_rail_swap.html",
+        {
+            "presets": all_presets,
+            "preset_base": base.name if base else None,
+            "preset_diff": _preset_diff(selected, base),
+            "matching_preset": _matching_preset(selected, all_presets),
+            "presets_json": json.dumps([asdict(preset) for preset in all_presets]),
+            "flash": {"message": message, "tone": tone},
+        },
+        status_code=status_code,
+    )
+
+
 @app.post("/presets", response_class=HTMLResponse)
 async def presets_save(request: Request):
     """Fragment: save the current create-form choices under a name
@@ -1589,7 +1613,9 @@ async def presets_save(request: Request):
     form = await request.form()
     name = (form.get("name") or "").strip()
     if not name:
-        return _flash(request, messages.preset_name_required(), tone="error", status_code=400)
+        return _preset_rail_response(
+            request, form, message=messages.preset_name_required(), tone="error", status_code=400
+        )
 
     # Same validation as provisioning itself: a preset that silently
     # recorded a default the user never picked would hand that wrong choice
@@ -1600,9 +1626,10 @@ async def presets_save(request: Request):
     try:
         choices = _create_choices_from_form(form, server_types)
     except CreateChoicesInvalid as exc:
-        return _flash(
+        return _preset_rail_response(
             request,
-            _with_catalogue_notice(exc.message, notice),
+            form,
+            message=_with_catalogue_notice(exc.message, notice),
             tone="error",
             status_code=400,
         )
@@ -1619,14 +1646,23 @@ async def presets_save(request: Request):
 
     already = _matching_preset(_selected_from_form(form), presets.list_presets())
     if already and already != name:
-        return _flash(request, messages.preset_already_saved(already), status_code=409)
+        return _preset_rail_response(
+            request, form, message=messages.preset_already_saved(already), status_code=409
+        )
 
     try:
         presets.save(preset)
     except presets.PresetNameTaken:
-        return _flash(request, messages.preset_name_taken(name), tone="error", status_code=409)
+        return _preset_rail_response(
+            request, form, message=messages.preset_name_taken(name), tone="error", status_code=409
+        )
 
-    return _flash(request, messages.preset_saved(name))
+    # The form is now that preset, so the rail comes back anchored to it:
+    # the change list is empty and the save box says these choices are
+    # already saved, which is what it would say after a reload.
+    return _preset_rail_response(
+        request, form, message=messages.preset_saved(name), preset_base=name
+    )
 
 
 @app.post("/presets/{name}/update", response_class=HTMLResponse)
@@ -1646,14 +1682,20 @@ async def presets_update(name: str, request: Request):
     try:
         choices = _create_choices_from_form(form, server_types)
     except CreateChoicesInvalid as exc:
-        return _flash(
-            request, _with_catalogue_notice(exc.message, notice), tone="error", status_code=400
+        return _preset_rail_response(
+            request,
+            form,
+            message=_with_catalogue_notice(exc.message, notice),
+            tone="error",
+            status_code=400,
         )
 
     try:
         presets.get(name)
     except presets.PresetNotFound:
-        return _flash(request, messages.preset_missing(name), tone="error", status_code=404)
+        return _preset_rail_response(
+            request, form, message=messages.preset_missing(name), tone="error", status_code=404
+        )
 
     presets.save(
         presets.Preset(
@@ -1664,7 +1706,12 @@ async def presets_update(name: str, request: Request):
         ),
         overwrite=True,
     )
-    return _flash(request, messages.preset_updated(name))
+    # Anchored to the preset just written, so the change list it was
+    # started from empties instead of still counting the changes that have
+    # now been saved.
+    return _preset_rail_response(
+        request, form, message=messages.preset_updated(name), preset_base=name
+    )
 
 
 @app.post("/presets/{name}/delete")

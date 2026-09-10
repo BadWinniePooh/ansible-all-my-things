@@ -179,6 +179,7 @@ entry that appears in the machine records.
 |---|---|---|---|
 | `GET` | `/presets` | — | List with rename and delete controls |
 | `POST` | `/presets` | — | Save the current create-form choices under a name |
+| `POST` | `/presets/{name}/update` | — | Write the current create-form choices over an existing preset |
 | `POST` | `/presets/{name}/delete` | — | Delete one preset |
 | `POST` | `/presets/{name}/rename` | — | Rename one preset |
 
@@ -189,6 +190,15 @@ for the same reason.
 
 `POST /presets` runs the same validation as `POST /create`, so a preset cannot
 record a choice the user did not make.
+
+`POST /presets` and `POST /presets/{name}/update` answer with the create screen's whole
+preset rail — the saved list, the change count and the save box — rather than with a
+confirmation line, so what changed is on the screen without a reload. Both carry two
+out-of-band elements with it: the preset data the browser diffs against, and the hidden
+field naming the preset the form now counts as its base. A refusal answers with the same
+rail, carrying the reason; the status code still distinguishes it (`400` for an invalid
+submission or a missing name, `409` for a taken name or choices already saved, `404` for an
+update to a preset that is not there).
 
 ## Defaults refresh
 
