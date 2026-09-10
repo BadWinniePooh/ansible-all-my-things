@@ -155,7 +155,7 @@ def unlocked(client):
 
 
 @pytest.fixture
-def two_machines(ledger):
+def two_machines(ledger, monkeypatch):
     now = datetime.now(timezone.utc)
     costs.record_running(
         [
@@ -164,6 +164,12 @@ def two_machines(ledger):
         ],
         now,
         database=ledger,
+    )
+    # The account still reports both, which is what keeps their rows open:
+    # every dashboard render reconciles the ledger against it, and a row
+    # the account has stopped reporting is closed there and then.
+    monkeypatch.setattr(
+        hcloud_api, "list_servers", lambda token: [{"name": "mordor"}, {"name": "edoras"}]
     )
     return ledger
 
@@ -190,6 +196,21 @@ def test_the_sidebar_counts_the_machines_on_every_page(client, unlocked, two_mac
         assert "2 machines" in foot, path
         # ...and what they are costing while they run.
         assert "/h" in foot, path
+
+
+def test_a_machine_the_account_has_forgotten_stops_being_counted(client, unlocked, ledger):
+    """The sidebar counted the ledger's open rows, and the ledger was only
+    ever reconciled while the local records still listed a machine. So
+    destroying the last machine left its row open forever: the badge kept
+    claiming one machine the dashboard no longer listed, and its hourly
+    rate kept accruing into the month's estimate."""
+    now = datetime.now(timezone.utc)
+    costs.record_running([machine("edoras", now - timedelta(days=1))], now, database=ledger)
+
+    foot = client.get("/").text.split('class="sidebar-foot"')[1].split("</div>")[0]
+
+    assert "0 machines" in foot
+    assert costs.open_lives(database=ledger) == []
 
 
 def test_the_badge_carries_no_rate_when_nothing_is_running(client, ledger):

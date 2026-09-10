@@ -88,19 +88,19 @@ templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_
 
 def _euro(amount: float | None) -> str:
     """A money figure, or "unknown" when there is nothing to compute one
-    from -- never €0.00, which would read as "this machine is free"."""
+    from -- never â‚¬0.00, which would read as "this machine is free"."""
     if amount is None:
         return "unknown"
-    return f"€{amount:,.2f}"
+    return f"â‚¬{amount:,.2f}"
 
 
 def _euro_rate(amount: float | None) -> str:
     """An hourly rate. Three decimals, because a cent an hour is the order
-    of magnitude here and €0.01 would round two machines to the same
+    of magnitude here and â‚¬0.01 would round two machines to the same
     figure."""
     if amount is None:
         return "nothing"
-    return f"€{amount:,.3f}/h"
+    return f"â‚¬{amount:,.3f}/h"
 
 
 templates.env.filters["euro"] = _euro
@@ -146,7 +146,12 @@ def _machines_with_account_detail(session_id: str, status: dict) -> tuple[list, 
     which is a weaker answer than the one the page normally shows.
     """
     machines = inventory.list_machines()
-    if not machines or not status["token_unlocked"]:
+    # Asked even when this installation manages nothing: the ledger may
+    # still hold an open row for a machine that was destroyed, and the
+    # account is the only thing that can say so. Skipping the call here is
+    # what left the sidebar counting a machine the dashboard no longer
+    # listed -- and its hourly rate still accruing into the month.
+    if not status["token_unlocked"]:
         return machines, None
     try:
         servers = hcloud_api.list_servers(secret_store.hcloud_token(session_id))
@@ -162,7 +167,11 @@ def _machines_with_account_detail(session_id: str, status: dict) -> tuple[list, 
     # estimate include a machine that ran for nine days and is now gone.
     now = datetime.now(timezone.utc)
     costs.record_running(merged, now)
-    costs.close_missing({machine.name for machine in merged if machine.status}, now)
+    # Closed against what the account reports, not against what this
+    # installation manages: a machine provisioned from the command line is
+    # still alive and still billed, and its row must not be closed just
+    # because the local records never knew about it.
+    costs.close_missing(set(_server_names(servers)), now)
     # A row that matched nothing keeps whatever the local records knew,
     # which is usually nothing -- and "unknown" on its own does not say
     # why. The two sides disagreeing about names is the reason worth
