@@ -29,6 +29,14 @@
 /inventories/group_vars/all/vault.yml
 !/scripts/export-secrets.py
 !/scripts/echo-vault-password-environment-variable.sh
+# The web frontend's in-memory secret store and its tests hold no secret
+# of their own -- only the code that keeps the two session secrets out of
+# every file, log line and argument list. Both names match *secrets*
+# above, which silently kept them out of git: a clone then had no
+# webui/secrets.py at all, so the application could not import, and the
+# image built from that clone could not start.
+!/webui/secrets.py
+!/tests/webui/test_secrets.py
 
 # Skip backup files
 /configuration/**/backup/*
