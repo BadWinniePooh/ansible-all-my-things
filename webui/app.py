@@ -88,19 +88,19 @@ templates = Jinja2Templates(directory=str(_templates_dir), context_processors=[_
 
 def _euro(amount: float | None) -> str:
     """A money figure, or "unknown" when there is nothing to compute one
-    from -- never €0.00, which would read as "this machine is free"."""
+    from -- never â‚¬0.00, which would read as "this machine is free"."""
     if amount is None:
         return "unknown"
-    return f"€{amount:,.2f}"
+    return f"â‚¬{amount:,.2f}"
 
 
 def _euro_rate(amount: float | None) -> str:
     """An hourly rate. Three decimals, because a cent an hour is the order
-    of magnitude here and €0.01 would round two machines to the same
+    of magnitude here and â‚¬0.01 would round two machines to the same
     figure."""
     if amount is None:
         return "nothing"
-    return f"€{amount:,.3f}/h"
+    return f"â‚¬{amount:,.3f}/h"
 
 
 templates.env.filters["euro"] = _euro
@@ -1292,6 +1292,20 @@ async def create_start(request: Request):
 
     command = build_provision_command(**choices)
 
+    # What this machine is, written down before the run starts. The account
+    # will answer the size and location later, but never which catalogue
+    # they were picked from, and never the image reference that was
+    # ordered -- both of which a preset made from this machine has to
+    # repeat exactly (webui/inventory.record_choices).
+    inventory.record_choices(
+        claimed_name,
+        {
+            **choices,
+            "server_types_live": bool(form.get("server_types_live")),
+            "images_live": bool(form.get("images_live")),
+        },
+    )
+
     try:
         await runner.start(
             session_id=session_id, action="provision", target=claimed_name, command=command
@@ -1371,11 +1385,18 @@ def _dashboard_refusal(request: Request, error: str, *, status_code: int):
 def _preset_from_machine(machine, preset_name: str) -> presets.Preset:
     """A preset that would provision this machine again.
 
-    The two catalogue flags are derived rather than asked for: a size or
-    image that is not in the built-in lists can only have come from the
-    live catalogue, and a preset that claims otherwise cannot be restored
-    (webui/presets.py Preset).
+    The two catalogue flags come from what was recorded when the machine
+    was ordered, because nothing else can know them: Hetzner reports a
+    `cx23` in `hel1` whether that was picked from the built-in list or
+    from the full live catalogue, and a preset that gets this wrong loads
+    against a different list than its choices came from.
+
+    Only a machine this interface did not provision has no record. Then
+    the flags are inferred from the built-in lists, which is the most that
+    can be said: a size or image those lists do not hold can only have
+    come from the live catalogue, while one they do hold is shown by both.
     """
+    recorded = inventory.recorded_choices(machine.name)
     built_in_images = {image["value"] for image in config.UBUNTU_LTS_IMAGES}
     return presets.Preset(
         name=preset_name,
@@ -1383,8 +1404,10 @@ def _preset_from_machine(machine, preset_name: str) -> presets.Preset:
         server_type=machine.server_type,
         location=machine.location,
         image=machine.image,
-        server_types_live=machine.server_type not in config.SERVER_TYPES,
-        images_live=machine.image not in built_in_images,
+        server_types_live=bool(
+            recorded.get("server_types_live", machine.server_type not in config.SERVER_TYPES)
+        ),
+        images_live=bool(recorded.get("images_live", machine.image not in built_in_images)),
     )
 
 

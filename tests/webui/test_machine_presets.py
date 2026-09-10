@@ -42,6 +42,13 @@ SERVER = {
 @pytest.fixture(autouse=True)
 def volume_state(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "COST_DB_FILE", tmp_path / "costs.sqlite3")
+    # No record by default: the machine reads as one this interface did not
+    # provision, which is the case the inference below has to cover.
+    monkeypatch.setattr(
+        inventory,
+        "recorded_choices",
+        functools.partial(inventory.recorded_choices, details_file=tmp_path / "details.json"),
+    )
     monkeypatch.setattr(pool, "status", lambda **kwargs: pool.PoolStatus([], [], []))
     monkeypatch.setattr(seed, "needs_defaults_refresh", lambda: False)
     monkeypatch.setattr(inventory, "list_machines", lambda **kwargs: [MACHINE])
@@ -122,6 +129,41 @@ def test_built_in_choices_are_not_marked_as_live(client, unlocked, presets_file)
     (saved,) = presets.list_presets()
     assert saved.server_types_live is False
     assert saved.images_live is False
+
+
+def test_the_catalogue_the_machine_was_ordered_from_is_kept(
+    client, unlocked, presets_file, tmp_path, monkeypatch
+):
+    """A cx23 picked from the full live catalogue is still a cx23 in the
+    account, so nothing about the machine can say which list it came from.
+    Only what was written down when the run started can, and a preset that
+    gets it wrong loads against a different list than its choices came
+    from."""
+    details = tmp_path / "details.json"
+    inventory.record_choices(
+        "edoras",
+        {
+            "profile": "basic",
+            "server_type": "cx23",
+            "location": "hel1",
+            "image": "ubuntu-26.04",
+            "server_types_live": True,
+            "images_live": True,
+        },
+        details_file=details,
+    )
+    monkeypatch.setattr(
+        inventory,
+        "recorded_choices",
+        functools.partial(inventory.recorded_choices, details_file=details),
+    )
+
+    client.post("/machines/edoras/preset", data={"preset_name": "small-hel"})
+
+    (saved,) = presets.list_presets()
+    assert saved.server_type == "cx23"
+    assert saved.server_types_live is True
+    assert saved.images_live is True
 
 
 def test_a_taken_name_is_refused_rather_than_overwritten(client, unlocked, presets_file):

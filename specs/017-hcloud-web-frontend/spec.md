@@ -435,14 +435,18 @@ is filled with the saved values.
   longer opens the configuration blocks every run, including destroying a machine that is
   still being charged for.
 - **FR-053**: Users MUST be able to save an existing machine as a preset, taking its
-  profile, size, location and image from what that machine actually is. The interface MUST
-  refuse rather than save an incomplete preset when any of those cannot be determined.
+  profile, size, location and image from what that machine actually is, and recording the
+  catalogue each of those was chosen from. The interface MUST refuse rather than save an
+  incomplete preset when any of those cannot be determined.
 - **FR-054**: The action that saves a set of choices as a new preset MUST be reachable when
   no preset exists yet, since otherwise the first one can never be created.
 - **FR-055**: The count of running machines MUST agree with the machine list on the same
   screen. Any record of a machine that the provider no longer reports MUST be reconciled
   whenever the provider can be reached, including when the installation manages no machines
   at all.
+- **FR-057**: The system MUST record, for each machine it provisions, the choices the
+  machine was ordered with — including which catalogue the size and image were picked from,
+  which the provider cannot report.
 
 ### Key Entities
 

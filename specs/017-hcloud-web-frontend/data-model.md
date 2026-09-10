@@ -141,8 +141,9 @@ interface. The interface never writes this file.
 | name | inventory key | Also the pool entry that is claimed |
 | address | `ansible_host` | Displayed in the list |
 | profile | group membership | `basic` or `desktop` |
-| size, location | run parameters | Displayed as recorded at creation |
-| status, created, size, location, image | Hetzner account | Overlaid while the API token is unlocked; the image exists nowhere else |
+| profile, size, location, image | run parameters | Written to `.webui/machine_details.json` when the interface starts a provisioning run |
+| `server_types_live`, `images_live` | run parameters | Which catalogue each choice was picked from — the account cannot answer this |
+| status, created, size, location | Hetzner account | Overlaid while the API token is unlocked |
 
 Validation:
 
@@ -207,10 +208,12 @@ Validation:
 
 A preset has two sources. The create form is one: whatever is typed into it. A machine that
 already exists is the other, through the *Save as preset* action on its row — the profile
-comes from the machine record, and the size, location and image from the Hetzner account.
-The image can come from nowhere else: no local file records what a machine was built from.
-A machine the account cannot fully describe is refused rather than saved with a gap, since
-a preset with a missing field silently provisions something else.
+from the machine record, the size, location and image from the Hetzner account, and the two
+catalogue flags from what the interface recorded when it started that machine's run. The
+account cannot answer the flags: a `cx23` is a `cx23` whichever list it was picked from. A
+machine the interface did not provision has no record, and the flags are inferred from the
+built-in lists instead. A machine the account cannot fully describe is refused rather than
+saved with a gap, since a preset with a missing field silently provisions something else.
 
 Presets hold no secrets. They are ordinary configuration and are safe at rest.
 

@@ -215,12 +215,18 @@ it catches choices arrived at by hand too.
 
 **A running machine can be saved as a preset.** Each row of the machines table
 carries *Save as preset*, prefilled with the machine's own name. It records
-what that machine actually is: the profile from the local records, and the
-size, location and image from the Hetzner account — the image comes from
-nowhere else, since no local file has ever recorded what a machine was built
-from. The API token therefore has to be unlocked, and a machine the account
-cannot fully describe (a snapshot-built server has no image name, only a
-description) is refused by name rather than saved with a hole in it.
+what that machine actually is: the profile from the local records, the size,
+location and image from the Hetzner account, and — from what the interface
+wrote down when it started the run — which catalogue each of those was picked
+from. That last part exists nowhere else: Hetzner reports a `cx23` in `hel1`
+whether it was chosen from the built-in list or from the full live one, so a
+preset without the record would load against a list its choices never came
+from. A machine this interface did not provision has no record, and the flags
+are then inferred from the built-in lists, which is the most that can be said.
+
+The API token has to be unlocked, and a machine the account cannot fully
+describe (a snapshot-built server has no image name, only a description) is
+refused by name rather than saved with a hole in it.
 
 Renaming and deleting stay on the presets screen, one click away through
 *Manage presets*.

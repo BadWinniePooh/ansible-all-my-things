@@ -15,10 +15,14 @@ Every Hetzner call is stubbed; nothing here reaches the network.
 
 from __future__ import annotations
 
+import functools
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
 from webui import app as app_module
+from webui import config
 from webui import hcloud_api
 from webui.app import SESSION_COOKIE_NAME, app, secret_store
 
@@ -269,7 +273,23 @@ VALID_FORM = {
 
 
 @pytest.fixture
-def ready_to_provision(monkeypatch):
+def machine_details(tmp_path, monkeypatch):
+    """Where a started run writes down what it ordered. Bound on the
+    module's own function too, not just on config: inventory.py takes the
+    path as a default argument, which is read at import time."""
+    path = tmp_path / "machine_details.json"
+    monkeypatch.setattr(config, "MACHINE_DETAILS_FILE", path)
+    for name in ("record_choices", "recorded_choices", "list_machines"):
+        monkeypatch.setattr(
+            app_module.inventory,
+            name,
+            functools.partial(getattr(app_module.inventory, name), details_file=path),
+        )
+    return path
+
+
+@pytest.fixture
+def ready_to_provision(monkeypatch, machine_details):
     """A pool with a free name and a runner that records instead of
     spawning ansible-playbook."""
     started: list[list[str]] = []
@@ -280,6 +300,30 @@ def ready_to_provision(monkeypatch):
     monkeypatch.setattr(app_module.pool, "next_free_name", lambda: "vm-1")
     monkeypatch.setattr(app_module.runner, "start", fake_start)
     return started
+
+
+def test_a_started_run_records_what_it_ordered(
+    client, unlocked, live_catalogue, ready_to_provision, machine_details
+):
+    """The account will answer the size and location later, but never which
+    catalogue they were picked from -- and a preset made from this machine
+    has to load against the same list its choices came from."""
+    client.post(
+        "/create",
+        data={
+            **VALID_FORM,
+            "server_type": "ccx13",
+            "location": "ash",
+            "server_types_live": "on",
+        },
+    )
+
+    recorded = json.loads(machine_details.read_text(encoding="utf-8"))["vm-1"]
+    assert recorded["server_type"] == "ccx13"
+    assert recorded["location"] == "ash"
+    assert recorded["image"] == "ubuntu-24.04"
+    assert recorded["server_types_live"] is True
+    assert recorded["images_live"] is False
 
 
 @pytest.mark.parametrize(
