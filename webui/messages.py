@@ -24,6 +24,7 @@ DONE: dict[str, str] = {
     "session-unlocked": "Session unlocked.",
     "session-locked": "Session locked. Both secrets are gone from memory.",
     "vault-saved": "Configuration saved, encrypted with your vault password.",
+    "vault-discarded": "Encrypted configuration discarded. The next vault password you enter becomes the new one.",
     "pool-saved": "Name pool saved.",
     "preset-deleted": "Preset deleted.",
     "preset-renamed": "Preset renamed.",
@@ -47,6 +48,31 @@ def done(path: str, code: str) -> RedirectResponse:
     """
     assert code in DONE, f"unknown message code {code!r}"
     return RedirectResponse(f"{path}?done={code}", status_code=303)
+
+
+# What the user types to confirm discarding the encrypted configuration.
+# Lives here rather than in the route or the template because all three --
+# the form's placeholder, the check, and the sentence naming it when the
+# check fails -- must say the same word.
+DISCARD_CONFIRMATION = "discard"
+
+
+def vault_password_repeat_mismatch() -> str:
+    return (
+        "The two vault passwords do not match. Nothing was created -- enter the same "
+        "password twice, because this first one cannot be checked against anything later."
+    )
+
+
+def vault_discard_confirmation_required() -> str:
+    return (
+        f"Type '{DISCARD_CONFIRMATION}' exactly to confirm discarding the encrypted "
+        "configuration. Nothing was removed."
+    )
+
+
+def vault_nothing_to_discard() -> str:
+    return "There is no encrypted configuration to discard."
 
 
 def preset_saved(name: str) -> str:

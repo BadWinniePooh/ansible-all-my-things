@@ -85,10 +85,19 @@ this case directly.
 State transitions:
 
 ```text
-absent --first save--> encrypted
+absent --password entered twice, entries match--> encrypted (empty document)
+absent --entries differ--> absent, error reported
 encrypted --save--> encrypted (re-encrypted with the same session password)
 encrypted --wrong password--> unchanged, error reported
+encrypted --discard, confirmation typed--> absent, vault password forgotten in every session
 ```
+
+The password that makes the file is the only one nothing can check: every later password is
+checked against this file, so a typo at creation becomes the real password and no run works
+afterwards — Ansible loads `group_vars/all/vault.yml` for every host and fails at decryption
+before the play starts, so even destroying a machine is refused. Hence both edges above that
+the other transitions do not need: the repeat entry that guards creation, and the discard
+that is the only way back when the guard was not there.
 
 ## SSH Keypair
 

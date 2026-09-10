@@ -37,6 +37,12 @@ live in memory for as long as the container runs, and both are discarded on rest
 after 30 minutes of inactivity. Re-entering them is normal, not a sign that something
 broke.
 
+On a fresh installation the vault password is asked for twice, because this first one
+creates the encrypted configuration and every later one is checked against it — there is
+nothing yet to check this one against, so a typo would silently become the real password.
+If that ever happens, the Vault screen's **Discard configuration** action deletes the
+unreadable file so setup can start over; everything it held is lost with it.
+
 ### 3. Fill in the configuration
 
 Open **Vault** and complete the form. It is generated from the project's own configuration

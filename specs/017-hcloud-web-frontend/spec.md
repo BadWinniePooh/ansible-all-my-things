@@ -70,21 +70,28 @@ restart.
 **Acceptance Scenarios**:
 
 1. **Given** a fresh installation, **When** the user enters their Hetzner API token and a
-   vault password, **Then** the interface indicates both are unlocked for this session and
-   neither value is displayed back to them afterwards.
-2. **Given** unlocked credentials, **When** the user fills in the configuration form and
+   vault password twice, **Then** the interface indicates both are unlocked for this session
+   and neither value is displayed back to them afterwards.
+2. **Given** a fresh installation, **When** the user enters the vault password twice and the
+   two entries differ, **Then** no configuration is created, nothing is unlocked, and the
+   interface explains that this first password cannot be checked against anything later.
+3. **Given** a configuration whose password the user can no longer reproduce, **When** they
+   discard it from the configuration screen after typing the confirmation word, **Then** the
+   encrypted configuration is deleted, the vault password is forgotten, and setup can start
+   again.
+4. **Given** unlocked credentials, **When** the user fills in the configuration form and
    saves, **Then** the values are stored encrypted and can be read back after re-entering
    the same password.
-3. **Given** an incorrect vault password, **When** the user attempts to read existing
+5. **Given** an incorrect vault password, **When** the user attempts to read existing
    configuration, **Then** the interface reports that the password does not match and
    changes nothing.
-4. **Given** unlocked credentials, **When** the user requests key generation, **Then** a
+6. **Given** unlocked credentials, **When** the user requests key generation, **Then** a
    keypair is created, its public half is registered with their Hetzner account under the
    configured key name, and the private half is never shown or offered for download.
-5. **Given** an existing keypair, **When** the user triggers rotation, **Then** the
+7. **Given** an existing keypair, **When** the user triggers rotation, **Then** the
    interface first warns that machines already provisioned will become unreachable, and
    proceeds only on confirmation.
-6. **Given** the tool is restarted, **When** the user returns, **Then** the configuration
+8. **Given** the tool is restarted, **When** the user returns, **Then** the configuration
    and keypair are still present but the API token and vault password must be entered
    again.
 
@@ -409,6 +416,16 @@ is filled with the saved values.
 - **FR-049**: The interface MUST bind to the local machine only by default.
 - **FR-050**: The documentation MUST state the risk of exposing the interface beyond the
   local machine, given that it controls a cloud account.
+
+- **FR-051**: While no encrypted configuration exists, the system MUST require the vault
+  password to be entered twice and MUST refuse to create the configuration unless the two
+  entries are identical. This first password is the only one that cannot be checked against
+  the stored configuration, so a mistyped entry would silently become the real password.
+- **FR-052**: Users MUST be able to discard the encrypted configuration from the interface,
+  on an explicit typed confirmation, without holding a working vault password — and the
+  interface MUST state that every stored value is lost. Without this, a password that no
+  longer opens the configuration blocks every run, including destroying a machine that is
+  still being charged for.
 
 ### Key Entities
 

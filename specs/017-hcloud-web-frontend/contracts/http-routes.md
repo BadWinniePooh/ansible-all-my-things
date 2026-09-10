@@ -14,7 +14,7 @@ than attempting the action and failing (FR-014).
 | Method | Path | Requires | Purpose |
 |---|---|---|---|
 | `GET` | `/` | — | Dashboard: machine list, free-name count, secret indicators, defaults-refresh banner when versions differ |
-| `POST` | `/session/unlock` | — | Accept the Hetzner token, the vault password, or both. Values are stored in memory only |
+| `POST` | `/session/unlock` | — | Accept the Hetzner token, the vault password, or both. Values are stored in memory only. While no encrypted configuration exists, the vault password is also required a second time in `vault_password_confirm` and creates the configuration when both entries match |
 | `POST` | `/session/lock` | — | Discard both secrets immediately |
 | `GET` | `/session/status` | — | Fragment: the per-secret locked or unlocked indicators |
 
@@ -28,12 +28,20 @@ visibly disabled with the reason, so the interface never presents a control that
 | `GET` | `/vault` | vault password | Form generated from the configuration template, populated from the decrypted document |
 | `POST` | `/vault` | vault password | Merge submitted values over the existing document, re-encrypt, write |
 | `POST` | `/vault/users` | vault password | Fragment: add or remove a desktop-user row before saving |
+| `POST` | `/vault/discard` | — | Delete the encrypted configuration, on the typed confirmation `discard`, and drop the vault password from every session |
 
 `POST /vault` never replaces the document wholesale. Keys present in the stored
 configuration but absent from the template are written back unchanged (see
 [data-model.md](../data-model.md)).
 
 Submitted values for the managed SSH keys are discarded rather than merged.
+
+`POST /vault/discard` deliberately requires no unlocked session: the operator who needs it
+is the one whose password no longer opens the configuration, and until that file is gone no
+playbook runs at all — Ansible loads `group_vars/all/vault.yml` for every host and fails at
+decryption before the play starts, so even destroying a machine is refused. It answers `400`
+when there is nothing to discard or the confirmation does not match, and `409` while a run is
+active, because that run is reading the file.
 
 ## SSH key
 

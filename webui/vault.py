@@ -113,3 +113,37 @@ def apply_form_values(existing: dict, form_values: dict) -> dict:
     """
     filtered = {key: value for key, value in form_values.items() if key not in MANAGED_KEYS}
     return merge(existing, filtered)
+
+
+def create_vault(vault_password: str, *, vault_file: Path = config.VAULT_FILE) -> None:
+    """Create the encrypted configuration under a brand-new password.
+
+    Separate from write_vault() because the first write is the one nobody
+    can check afterwards: from here on every password is verified against
+    this file, so a file that does not open under the string that made it
+    locks the configuration for good. The write is therefore read back
+    immediately, and a file that fails that read is removed rather than
+    left behind as an undecryptable vault.yml.
+    """
+    write_vault({}, vault_password, vault_file=vault_file)
+    try:
+        read_vault(vault_password, vault_file=vault_file)
+    except VaultPasswordMismatch:
+        vault_file.unlink(missing_ok=True)
+        raise
+
+
+def discard(vault_file: Path = config.VAULT_FILE) -> bool:
+    """Delete the encrypted configuration; True if there was one.
+
+    The recovery path for a vault password nobody can reproduce: without
+    it, ansible-playbook cannot even destroy a machine, because Ansible
+    auto-loads group_vars/all/vault.yml for every host and fails at
+    decryption before the play starts. Deliberately deletes rather than
+    renames a backup aside -- a file kept "just in case" is a file nobody
+    can ever open again, holding the passwords of every account the
+    configuration named.
+    """
+    existed = vault_file.exists()
+    vault_file.unlink(missing_ok=True)
+    return existed

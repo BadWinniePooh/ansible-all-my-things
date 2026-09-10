@@ -89,4 +89,27 @@ function toggleReveal(id) {
 </script>
 {% endif %}
 
+{% if vault_configured %}
+<section>
+  <h2>Discard</h2>
+  <div class="card-body">
+    <form method="post" action="/vault/discard" class="danger-panel">
+      <strong>Discarding deletes the encrypted configuration and everything in it.</strong>
+      <p>Every value on this page — the account passwords and each desktop user's password and
+         API key — is gone and cannot be recovered. The SSH keypair on the volume is kept, so
+         machines provisioned with it stay reachable, but the key must be registered again
+         after a new configuration is saved.</p>
+      <p>This is the way out of a vault password that no longer opens the configuration: while
+         an unreadable one exists, no run works at all — not even destroying a machine, which
+         keeps costing money until it is gone.</p>
+      <div class="form-actions">
+        <input type="text" name="confirm" autocomplete="off"
+               placeholder="type '{{ discard_confirmation }}' to confirm" required>
+        <button class="btn-critical" type="submit">Discard configuration</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endif %}
+
 {% endblock %}

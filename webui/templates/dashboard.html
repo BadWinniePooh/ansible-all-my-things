@@ -30,19 +30,13 @@
   <section>
     <div class="card-body">
       <form method="post" action="/session/unlock" class="card-body" style="padding: 0">
-        <label>
-          Hetzner API token
-          <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
-        </label>
-        <label>
-          Vault password
-          <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
-        </label>
+        {% include "fragments/session_secret_fields.html" %}
         <button class="btn-primary btn-block" type="submit">Unlock</button>
       </form>
       {% if not vault_configured %}
       <p class="card-note">No configuration has been saved yet: the next password you enter here
-         becomes the vault password, and unlocks it from then on.</p>
+         becomes the vault password, and unlocks it from then on. It is asked for twice because
+         nothing exists yet to check it against — a typo would become the real password.</p>
       {% endif %}
     </div>
   </section>
@@ -140,14 +134,7 @@
       and are discarded on restart or after 30 minutes of inactivity.
     </p>
     <form method="post" action="/session/unlock" class="form-grid">
-      <label>
-        Hetzner API token
-        <input type="password" name="hcloud_token" autocomplete="off" placeholder="leave blank to keep unchanged">
-      </label>
-      <label>
-        Vault password
-        <input type="password" name="vault_password" autocomplete="off" placeholder="leave blank to keep unchanged">
-      </label>
+      {% include "fragments/session_secret_fields.html" %}
       <div class="form-actions">
         <button class="btn-primary" type="submit">Unlock</button>
       </div>

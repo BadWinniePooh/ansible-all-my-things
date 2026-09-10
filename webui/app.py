@@ -72,6 +72,14 @@ def _shell_context(request: Request) -> dict:
         **secret_store.status(session_id),
         "machine_count": len(running) or len(inventory.list_machines()),
         "machine_hourly": costs.hourly_of(running),
+        # Whether a configuration exists at all changes what two screens
+        # say -- the dashboard asks for the vault password twice while
+        # there is none, the vault screen offers to discard once there is
+        # one -- and the vault screen renders from four different places.
+        # Answering it here keeps those five renders from each remembering
+        # to.
+        "vault_configured": config.VAULT_FILE.exists(),
+        "discard_confirmation": messages.DISCARD_CONFIRMATION,
     }
 
 
@@ -246,7 +254,6 @@ def _dashboard_context(request: Request, *, error: str | None = None, notice: st
         "pool_next": pool_status.free[0] if pool_status.free else None,
         "locations": config.LOCATIONS,
         "defaults_refresh_available": seed.needs_defaults_refresh(),
-        "vault_configured": config.VAULT_FILE.exists(),
         **status,
     }
 
@@ -291,6 +298,7 @@ async def session_unlock(
     request: Request,
     hcloud_token: str = Form(default=""),
     vault_password: str = Form(default=""),
+    vault_password_confirm: str = Form(default=""),
 ):
     """Rejects a value that doesn't actually work, rather than storing it
     unlocked and letting it fail later deep inside a playbook run or a
@@ -298,6 +306,10 @@ async def session_unlock(
     only overwrites a field given a non-None value), so an invalid entry
     is downgraded to blank rather than aborting the whole submission --
     the other field in the same form may still be valid.
+
+    The password that creates the configuration is the one exception to
+    "checked against something": there is nothing to check it against yet,
+    which is why the form asks for it twice on that path alone.
     """
     session_id = request.state.session_id
     errors: list[str] = []
@@ -318,13 +330,20 @@ async def session_unlock(
             except vault.VaultPasswordMismatch:
                 errors.append("Vault password does not match the existing configuration.")
                 validated_password = None
+        elif vault_password_confirm != vault_password:
+            # First-time setup, typed twice and not matching. Refused
+            # before anything is written: a single mistyped entry here
+            # would become the canonical password, and nothing afterwards
+            # could tell it apart from the one the user meant.
+            errors.append(messages.vault_password_repeat_mismatch())
+            validated_password = None
         else:
             # First-time setup (SC-006: no vault.yml is baked into the
             # image or seeded into a fresh volume): whichever password is
             # entered here becomes canonical, by creating an empty
             # encrypted vault.yml under it now. Every later unlock is then
             # checked against this file via the branch above.
-            vault.write_vault({}, vault_password)
+            vault.create_vault(vault_password)
 
     secret_store.unlock(session_id, hcloud_token=validated_token, vault_password=validated_password)
 
@@ -373,6 +392,21 @@ def _desktop_users_from_form(form) -> list[dict]:
     ]
 
 
+def _vault_message(request: Request, status: dict, error: str, *, status_code: int):
+    """The vault screen carrying a message, with no configuration shown.
+
+    The three places this screen renders without a decrypted document to
+    fill it -- a password that does not open the file, a save attempted
+    while locked, and a refused discard -- all render this same shape.
+    """
+    return templates.TemplateResponse(
+        request,
+        "vault.html",
+        {**status, "error": error, "values": {}, "desktop_users": []},
+        status_code=status_code,
+    )
+
+
 @app.get("/vault", response_class=HTMLResponse)
 async def vault_form(request: Request, done: str | None = None):
     status = session_status_context(request.state.session_id)
@@ -386,11 +420,9 @@ async def vault_form(request: Request, done: str | None = None):
     try:
         existing = vault.read_vault(password)
     except vault.VaultPasswordMismatch as exc:
-        return templates.TemplateResponse(
-            request,
-            "vault.html",
-            {**status, "error": str(exc), "values": {}, "desktop_users": []},
-        )
+        # 200 rather than a refusal code: nothing was asked for and nothing
+        # was refused -- the page simply has no configuration to show.
+        return _vault_message(request, status, str(exc), status_code=200)
 
     template = vault.load_template()
     desktop_users = existing.get("vault_desktop_users") or template.get("vault_desktop_users") or []
@@ -406,15 +438,10 @@ async def vault_save(request: Request):
     session_id = request.state.session_id
     status = session_status_context(session_id)
     if not status["vault_unlocked"]:
-        return templates.TemplateResponse(
+        return _vault_message(
             request,
-            "vault.html",
-            {
-                **status,
-                "error": "Vault password is required to save the configuration.",
-                "values": {},
-                "desktop_users": [],
-            },
+            status,
+            "Vault password is required to save the configuration.",
             status_code=400,
         )
 
@@ -442,6 +469,44 @@ async def vault_save(request: Request):
     merged = vault.apply_form_values(existing, form_values)
     vault.write_vault(merged, password)
     return messages.done("/vault", "vault-saved")
+
+
+@app.post("/vault/discard")
+async def vault_discard(request: Request, confirm: str = Form(default="")):
+    """Delete the encrypted configuration, on a typed confirmation.
+
+    The way out of a vault password nobody can reproduce: while that file
+    exists and cannot be opened, no playbook runs at all -- Ansible loads
+    group_vars/all/vault.yml for every host, so even destroying a machine
+    fails at decryption, and the machine keeps costing money. Confirmed by
+    typing the word rather than by a button alone, the same shape the
+    destroy action uses, because everything the configuration held is gone
+    afterwards.
+    """
+    status = session_status_context(request.state.session_id)
+
+    if not config.VAULT_FILE.exists():
+        return _vault_message(
+            request, status, messages.vault_nothing_to_discard(), status_code=400
+        )
+
+    if confirm.strip() != messages.DISCARD_CONFIRMATION:
+        return _vault_message(
+            request, status, messages.vault_discard_confirmation_required(), status_code=400
+        )
+
+    # A run in flight is reading this file right now; pulling it out from
+    # under ansible-playbook would fail the run somewhere in the middle of
+    # provisioning or destroying a real machine.
+    active = runner.active
+    if active is not None and active.outcome == "running":
+        return _vault_message(
+            request, status, messages.run_already_active(active.action), status_code=409
+        )
+
+    vault.discard(config.VAULT_FILE)
+    secret_store.forget_vault_password()
+    return messages.done("/vault", "vault-discarded")
 
 
 @app.post("/vault/users", response_class=HTMLResponse)

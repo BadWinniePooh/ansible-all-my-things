@@ -51,6 +51,40 @@ and the name pool. The sidebar marks the same rule everywhere — Create VM, Run
 Vault and SSH key carry a padlock until the secrets they need are present,
 while Name pool and Presets stay open because neither reads a secret.
 
+## The first vault password, and losing it
+
+On a fresh installation there is no encrypted configuration yet, so the first
+vault password entered on the dashboard becomes *the* vault password: it
+creates `group_vars/all/vault.yml`, and every password entered afterwards is
+checked against that file. That first one is the only password nothing can
+check, which is why the unlock form asks for it twice while no configuration
+exists. Enter it identically both times or nothing is created (spec.md FR-051).
+
+If a vault password is lost, the installation is stuck rather than merely
+inconvenienced: Ansible loads `group_vars/all/vault.yml` for every host, so a
+file nobody can decrypt fails every run before the first task — provisioning,
+configuring, **and destroying**, which means a running machine keeps costing
+money with no way to remove it from the interface.
+
+The way out is on the Vault screen, at the bottom: **Discard configuration**.
+Type `discard` to confirm. It deletes the encrypted configuration and forgets
+the vault password in every session, so setup starts over with a new password
+(spec.md FR-052). What it costs:
+
+- Every value the configuration held is gone for good — the Ansible user
+  password, the GNOME keyring password, and each desktop user's password and
+  Exa API key. There is no backup copy, deliberately: a file nobody can open,
+  kept "just in case", is a permanent copy of those same passwords.
+- The SSH keypair in `inventories/.webui/ssh/` is **not** deleted, so machines
+  already provisioned stay reachable. Register the key again from the SSH key
+  screen once a new configuration is saved, so its name and public half are
+  recorded in it.
+- A machine that outlives the configuration can then be destroyed normally
+  through the interface, once the new configuration and key registration are in
+  place.
+
+Discarding is refused while a run is active — that run is reading the file.
+
 ## Persistent state
 
 A single named volume is mounted at `/ansible/inventories`. It holds the
