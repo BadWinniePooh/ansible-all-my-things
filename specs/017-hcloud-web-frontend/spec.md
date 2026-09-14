@@ -94,6 +94,10 @@ restart.
 8. **Given** the tool is restarted, **When** the user returns, **Then** the configuration
    and keypair are still present but the API token and vault password must be entered
    again.
+9. **Given** the user has listed their own SSH public key in the configuration, **When** a
+   machine is configured, **Then** the user can log in to every account on it with their
+   own private key; a line that is not a public key is refused on save, naming its line
+   number, and nothing is saved.
 
 ---
 
@@ -365,6 +369,13 @@ is filled with the saved values.
 - **FR-025**: Users MUST be able to re-trigger key generation and registration at any time.
 - **FR-026**: Before rotating a key, the system MUST warn that machines already provisioned
   will become unreachable, and MUST require confirmation.
+- **FR-058**: Users MUST be able to record their own SSH public keys in the encrypted
+  configuration, one per line, and every listed key MUST be authorized for every account
+  on a machine when it is configured, next to the generated key. Because the generated
+  private key never leaves the tool (FR-024), this is the only way the user can log in to
+  a machine themselves. A line that is not a public key MUST reject the whole save, and the
+  rejection MUST name the line by number rather than repeat its content, since it may be a
+  pasted private key.
 
 #### Provisioning, configuration and destruction
 

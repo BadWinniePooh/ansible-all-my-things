@@ -72,6 +72,18 @@ def vault_discard_confirmation_required() -> str:
     )
 
 
+def additional_ssh_keys_invalid(line_numbers: list[int]) -> str:
+    # Names lines, never their content: a rejected line may be a private key.
+    if len(line_numbers) == 1:
+        where = f"Line {line_numbers[0]} of your SSH public keys is"
+    else:
+        where = f"Lines {', '.join(str(n) for n in line_numbers)} of your SSH public keys are"
+    return (
+        f"{where} not an OpenSSH public key. Nothing was saved -- paste the contents of a "
+        ".pub file, one key per line, and never a private key."
+    )
+
+
 def vault_nothing_to_discard() -> str:
     return "There is no encrypted configuration to discard."
 

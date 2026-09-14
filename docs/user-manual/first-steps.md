@@ -79,6 +79,7 @@ Fill in these fields:
 |---|---|
 | `vault_my_ansible_user_password` | Password for the `gandalf` admin account |
 | `vault_my_ssh_public_key` | Output of `cat ~/.ssh/id_ansible_ed25519.pub` |
+| `vault_my_additional_ssh_public_keys` | Optional list of further public keys to log in with; leave `[]` |
 | `vault_desktop_users[0].name` | Account name you want to log in with, e.g. your own username |
 | `vault_desktop_users[0].password` | Login password for that desktop account |
 | `vault_desktop_users[0].exa_api_key` | [Exa](https://exa.ai) API key (any placeholder string works for local use) |

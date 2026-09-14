@@ -63,6 +63,7 @@ configuration exists. As of this writing the template models:
 | `vault_my_ansible_user_password` | string, secret | editable, masked, reveal toggle |
 | `vault_my_ssh_key_name` | string | read-only, managed by the keypair feature |
 | `vault_my_ssh_public_key` | string | read-only, managed by the keypair feature |
+| `vault_my_additional_ssh_public_keys` | list of strings | editable, one public key per line |
 | `vault_gnome_keyring_password` | string, secret | editable, masked |
 | `vault_windows_admin_password` | string, secret | editable, marked as unused in this scope |
 | `vault_desktop_users` | list of objects with `name`, `password`, `exa_api_key` | add and remove rows, at least one required |
@@ -73,6 +74,11 @@ Validation:
   requirement.
 - Managed keys are not accepted from form input at all; a submitted value for them is
   discarded rather than merged.
+- Every non-blank line of `vault_my_additional_ssh_public_keys` must read as one OpenSSH
+  public key under `ssh-keygen -l`. Any other line rejects the whole save, and the error
+  names the line number only, never its content, since it may be a pasted private key.
+  These keys are the operator's own way in: the generated private key never leaves the
+  volume, and `playbooks/setup-users.yml` authorizes these next to it for every account.
 
 Preservation rule, load-bearing:
 

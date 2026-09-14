@@ -14,6 +14,10 @@
 
     ssh_public_key: "{{ my_ssh_public_key | default('my_ssh_public_key must be configured in inventory/group_vars/all/vault.yml') }}"
 
+    # The configured key plus the operator's own, newline-separated as the
+    # authorized_key module expects for several keys in one task.
+    ssh_public_keys: "{{ ([ssh_public_key] + my_additional_ssh_public_keys) | join('\n') }}"
+
   handlers:
     - name: Restart SSH
       service:
@@ -61,6 +65,17 @@
           inventories/group_vars/all/vault-template.yml.
       loop: "{{ vault_desktop_users }}"
 
+    - name: Assert the additional SSH public keys are a list
+      ansible.builtin.assert:
+        that:
+          - my_additional_ssh_public_keys is sequence
+          - my_additional_ssh_public_keys is not string
+        fail_msg: >-
+          vault_my_additional_ssh_public_keys in
+          inventories/group_vars/all/vault.yml must be a list of public key
+          strings, one entry per key. See
+          inventories/group_vars/all/vault-template.yml.
+
   tasks:
     - name: Setup accounts "{{ all_users | map(attribute='name') | join(', ') }}"
       no_log: true # Prevent logging the passwords
@@ -82,11 +97,11 @@
         create: yes
         state: present
 
-    - name: Add SSH public key to "{{ all_users | map(attribute='name') | join(', ') }}"
+    - name: Add SSH public keys to "{{ all_users | map(attribute='name') | join(', ') }}"
       no_log: true # Prevent logging the passwords
       authorized_key:
         user: "{{ item.name }}"
-        key: "{{ ssh_public_key }}"
+        key: "{{ ssh_public_keys }}"
         state: present
       loop: "{{ all_users }}"
 

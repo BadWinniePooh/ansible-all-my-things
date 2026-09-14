@@ -12,6 +12,15 @@ vault_my_ssh_key_name: "PROVIDE_SSH_KEY_NAME_HERE"
 
 vault_my_ssh_public_key: "PROVIDE_SSH_PUBLIC_KEY_HERE"
 
+# Your own SSH public keys, one list entry per key. Each is authorized for
+# every account next to vault_my_ssh_public_key, so you can log in with your
+# own private key even when vault_my_ssh_public_key belongs to a tool (the web
+# frontend generates and keeps its own). Optional: leave the list empty when
+# vault_my_ssh_public_key is already yours. Removing an entry later does not
+# revoke it on machines that already received it.
+vault_my_additional_ssh_public_keys: []
+#  - "ssh-ed25519 PROVIDE_YOUR_PUBLIC_KEY_HERE you@laptop"
+
 vault_gnome_keyring_password: "PROVIDE_GNOME_KEYRING_PASSWORD_HERE"
 
 vault_windows_admin_password: "PROVIDE_STRONG_WINDOWS_PASSWORD_HERE"

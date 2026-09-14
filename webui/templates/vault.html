@@ -72,6 +72,22 @@
     </div>
   </section>
 
+  <section>
+    <h2>Your SSH public keys</h2>
+    <div class="card-body">
+      <label>
+        Public keys, one per line
+        <textarea name="vault_my_additional_ssh_public_keys" rows="4" class="mono" spellcheck="false"
+                  placeholder="ssh-ed25519 AAAA... you@laptop">{% if additional_ssh_keys_text is defined %}{{ additional_ssh_keys_text }}{% else %}{{ (values.vault_my_additional_ssh_public_keys or []) | join('\n') }}{% endif %}</textarea>
+        <small>The managed key above stays inside this tool, so it cannot log you in. Keys listed
+          here are authorized for every account on a machine the next time it is configured, so
+          you can connect with your own private key. Paste the <code>.pub</code> file only —
+          never the private key. Removing a key here does not revoke it on machines that
+          already have it.</small>
+      </label>
+    </div>
+  </section>
+
   {% include "fragments/desktop_users.html" %}
 
   <div class="form-actions">

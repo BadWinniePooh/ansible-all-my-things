@@ -54,6 +54,35 @@ def fingerprint(private_key_file: Path = config.SSH_PRIVATE_KEY_FILE) -> str | N
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def is_public_key(line: str) -> bool:
+    """True when `line` is one OpenSSH public key, as ssh-keygen reads it."""
+    result = subprocess.run(
+        ["ssh-keygen", "-l", "-f", "-"], input=line + "\n", capture_output=True, text=True
+    )
+    return result.returncode == 0
+
+
+def parse_additional_public_keys(text: str) -> tuple[list[str], list[int]]:
+    """The operator's own public keys, one per line, and the 1-based numbers
+    of the lines that are not a public key. Blank lines are ignored.
+
+    Line numbers rather than line content are what a caller reports: a
+    line that fails is as likely a pasted private key as a typo, and it
+    must not be repeated in a message.
+    """
+    keys: list[str] = []
+    invalid_lines: list[int] = []
+    for number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if is_public_key(line):
+            keys.append(line)
+        else:
+            invalid_lines.append(number)
+    return keys, invalid_lines
+
+
 def _generate_local_keypair(private_key_file: Path) -> None:
     private_key_file.parent.mkdir(parents=True, exist_ok=True)
     pub = public_key_file(private_key_file)

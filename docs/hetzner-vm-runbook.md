@@ -107,6 +107,7 @@ Fields to fill:
 | `vault_my_ansible_user_name` / `vault_my_ansible_user_password` | Temporary sudo user `setup-users.yml` creates |
 | `vault_my_ssh_key_name` | Must match the name you gave the key in the Hetzner console (step 3) |
 | `vault_my_ssh_public_key` | Full contents of `~/.ssh/id_ansible_ed25519.pub` — public key, never the private one |
+| `vault_my_additional_ssh_public_keys` | Optional list of further public keys authorized for every account; `[]` when the key above is yours |
 | `vault_gnome_keyring_password` | Desktop keyring unlock password |
 | `vault_windows_admin_password` | Only used for AWS Windows instances |
 | `vault_desktop_users` | List of `{name, password, exa_api_key}` — login accounts for the desktop session, at least one required. `exa_api_key` just needs to be a non-empty placeholder if you don't use Exa web search. |

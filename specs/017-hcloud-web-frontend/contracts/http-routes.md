@@ -36,6 +36,10 @@ configuration but absent from the template are written back unchanged (see
 
 Submitted values for the managed SSH keys are discarded rather than merged.
 
+`POST /vault` answers `400` and writes nothing when a non-blank line of
+`vault_my_additional_ssh_public_keys` is not an OpenSSH public key. The error names the line
+numbers, never the lines themselves.
+
 `POST /vault/discard` deliberately requires no unlocked session: the operator who needs it
 is the one whose password no longer opens the configuration, and until that file is gone no
 playbook runs at all — Ansible loads `group_vars/all/vault.yml` for every host and fails at

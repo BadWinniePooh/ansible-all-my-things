@@ -441,11 +441,14 @@ async def vault_save(request: Request):
     password = secret_store.vault_password(session_id)
     form = await request.form()
     desktop_users = _desktop_users_from_form(form)
+    additional_keys_text = form.get("vault_my_additional_ssh_public_keys", "")
+    additional_keys, invalid_key_lines = sshkeys.parse_additional_public_keys(additional_keys_text)
     form_values = {
         "vault_my_ansible_user_name": form.get("vault_my_ansible_user_name", ""),
         "vault_my_ansible_user_password": form.get("vault_my_ansible_user_password", ""),
         "vault_gnome_keyring_password": form.get("vault_gnome_keyring_password", ""),
         "vault_windows_admin_password": form.get("vault_windows_admin_password", ""),
+        "vault_my_additional_ssh_public_keys": additional_keys,
         "vault_desktop_users": desktop_users,
     }
 
@@ -460,6 +463,21 @@ async def vault_save(request: Request):
         )
 
     merged = vault.apply_form_values(existing, form_values)
+    if invalid_key_lines:
+        # Nothing is written: a half-accepted key list would silently drop
+        # the key the operator meant to log in with.
+        return templates.TemplateResponse(
+            request,
+            "vault.html",
+            {
+                **status,
+                "error": messages.additional_ssh_keys_invalid(invalid_key_lines),
+                "values": merged,
+                "additional_ssh_keys_text": additional_keys_text,
+                "desktop_users": desktop_users,
+            },
+            status_code=400,
+        )
     vault.write_vault(merged, password)
     return messages.done("/vault", "vault-saved")
 

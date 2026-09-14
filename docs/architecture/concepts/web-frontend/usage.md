@@ -51,6 +51,28 @@ and the name pool. The sidebar marks the same rule everywhere — Create VM, Run
 Vault and SSH key carry a padlock until the secrets they need are present,
 while Name pool and Presets stay open because neither reads a secret.
 
+## Logging in to a machine yourself
+
+The keypair on the SSH key screen belongs to the interface: its private half
+stays in the volume and is never shown or offered for download (spec.md
+FR-024). It is what the automation connects with, and it cannot log you in.
+
+To reach a machine yourself, paste your own public key — the contents of a
+`.pub` file — under **Your SSH public keys** on the Vault screen, one key per
+line (spec.md FR-058). Configuring a machine authorizes every listed key for
+every account on it, next to the interface's own key, so afterwards:
+
+```shell
+ssh -i ~/.ssh/id_ed25519 <desktop user>@<machine address>
+```
+
+A line that is not a public key refuses the whole save and is named by its
+line number, never repeated, since it may be a private key pasted by mistake.
+
+A machine configured before the key was listed does not have it yet: configure
+it again from the dashboard. Removing a key from the list does not revoke it
+on machines that already received it.
+
 ## The first vault password, and losing it
 
 On a fresh installation there is no encrypted configuration yet, so the first

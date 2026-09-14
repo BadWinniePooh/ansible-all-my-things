@@ -503,6 +503,18 @@ added name is claimed.
       0.3s before printing delivered its first SSE `data:` event at ~0.31s wall-clock from
       `POST /create`, comfortably under the 5s bound. The bulk of any real-world latency is
       `ansible-playbook`'s own startup (fact-gathering, module loading), not this pipeline
+- [X] T069 [US2] Let the operator log in to machines themselves (FR-058): the generated
+      private key never leaves the volume, so nothing else gives them a key any account
+      accepts. Adds `vault_my_additional_ssh_public_keys` (list) to
+      `inventories/group_vars/all/vault-template.yml`, mapped in `vars.yml` with an empty-list
+      default for vault files that predate it; `playbooks/setup-users.yml` asserts it is a
+      list and authorizes it next to `my_ssh_public_key` for every account; the vault form
+      edits it as one key per line, validated with `ssh-keygen -l` in
+      `webui/sshkeys.py` `parse_additional_public_keys()`, refusing the whole save and naming
+      rejected lines by number only (`tests/webui/test_additional_ssh_keys.py`). **VERIFIED**
+      in the local web image against its own root account: a vault without the setting
+      authorizes one key, a listed key adds a second, the second run reports no change, and
+      a string instead of a list fails the assertion
 
 ---
 
@@ -580,4 +592,5 @@ change.
 | Phase 8 (T046–T050) | `bgvv.7` (job runner) |
 | Phase 9 (T051–T055) | `bgvv.11` (hostname pool) |
 | Phase 10 (T056–T058) | `bgvv.12` (presets, shared with the create screen) |
+| T069 | `bgvv.39` (operator's own SSH public keys) |
 | Phase 11 (T059–T068) | `bgvv.2` (ADR), `bgvv.18` (documentation), `bgvv.15` (pytest suite, spanning T008/T010/T014/T027/T036/T053), `bgvv.7` (job runner, T068 SC-011 latency check) |

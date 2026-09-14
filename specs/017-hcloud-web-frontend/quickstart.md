@@ -51,6 +51,14 @@ required.
 
 The SSH key fields are shown read-only — the next step fills them in.
 
+Paste your own public key — the contents of a `.pub` file such as `~/.ssh/id_ed25519.pub` —
+under **Your SSH public keys**. The key the next step generates never leaves the container,
+so this is how you log in to a machine yourself, as your desktop user or the ansible user:
+
+```bash
+ssh -i ~/.ssh/id_ed25519 <desktop user>@<machine address>
+```
+
 ### 4. Generate and register an SSH key
 
 Open **SSH key** and generate. This creates a keypair, registers the public half with your
