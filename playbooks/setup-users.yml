@@ -14,9 +14,16 @@
 
     ssh_public_key: "{{ my_ssh_public_key | default('my_ssh_public_key must be configured in inventory/group_vars/all/vault.yml') }}"
 
+    # The operator's own keys, read from the vault directly rather than through
+    # a vars.yml mapping: the web frontend's volume keeps the
+    # group_vars/all/vars.yml it was first seeded with, where a mapping added
+    # later would be undefined. Optional, so the empty-list default is a real
+    # choice: vault files that predate the setting simply do not define it.
+    additional_ssh_public_keys: "{{ vault_my_additional_ssh_public_keys | default([]) }}"
+
     # The configured key plus the operator's own, newline-separated as the
     # authorized_key module expects for several keys in one task.
-    ssh_public_keys: "{{ ([ssh_public_key] + my_additional_ssh_public_keys) | join('\n') }}"
+    ssh_public_keys: "{{ ([ssh_public_key] + additional_ssh_public_keys) | join('\n') }}"
 
   handlers:
     - name: Restart SSH
@@ -68,8 +75,8 @@
     - name: Assert the additional SSH public keys are a list
       ansible.builtin.assert:
         that:
-          - my_additional_ssh_public_keys is sequence
-          - my_additional_ssh_public_keys is not string
+          - additional_ssh_public_keys is sequence
+          - additional_ssh_public_keys is not string
         fail_msg: >-
           vault_my_additional_ssh_public_keys in
           inventories/group_vars/all/vault.yml must be a list of public key

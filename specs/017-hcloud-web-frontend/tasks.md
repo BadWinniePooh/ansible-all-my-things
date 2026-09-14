@@ -506,9 +506,11 @@ added name is claimed.
 - [X] T069 [US2] Let the operator log in to machines themselves (FR-058): the generated
       private key never leaves the volume, so nothing else gives them a key any account
       accepts. Adds `vault_my_additional_ssh_public_keys` (list) to
-      `inventories/group_vars/all/vault-template.yml`, mapped in `vars.yml` with an empty-list
-      default for vault files that predate it; `playbooks/setup-users.yml` asserts it is a
-      list and authorizes it next to `my_ssh_public_key` for every account; the vault form
+      `inventories/group_vars/all/vault-template.yml`; `playbooks/setup-users.yml` reads it
+      directly with an empty-list default for vault files that predate it — not through a
+      `vars.yml` mapping, because the volume keeps the `vars.yml` it was first seeded with —
+      asserts it is a list and authorizes it next to `my_ssh_public_key` for every account;
+      the vault form
       edits it as one key per line, validated with `ssh-keygen -l` in
       `webui/sshkeys.py` `parse_additional_public_keys()`, refusing the whole save and naming
       rejected lines by number only (`tests/webui/test_additional_ssh_keys.py`). **VERIFIED**
